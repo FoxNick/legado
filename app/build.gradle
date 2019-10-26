@@ -3,7 +3,7 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 apply plugin: "de.timfreiheit.resourceplaceholders"
-apply plugin: 'io.fabric'
+//apply plugin: 'io.fabric'
 
 androidExtensions {
     experimental = true
@@ -21,10 +21,10 @@ android {
     compileSdkVersion 28
     signingConfigs {
         myConfig {
-            storeFile file(RELEASE_STORE_FILE)
-            storePassword RELEASE_STORE_PASSWORD
-            keyAlias RELEASE_KEY_ALIAS
-            keyPassword RELEASE_KEY_PASSWORD
+            storeFile file('./key_app4.keystore')
+            storePassword 'gs123654'
+            keyAlias 'key_app4'
+            keyPassword 'gs123654'
             v1SigningEnabled true
             v2SigningEnabled true
         }
@@ -157,4 +157,4 @@ dependencies {
     implementation 'org.apache.commons:commons-text:1.8'
 }
 
-apply plugin: 'com.google.gms.google-services'
+//apply plugin: 'com.google.gms.google-services'
