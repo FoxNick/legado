@@ -6,21 +6,20 @@ import android.view.MenuItem
 import androidx.appcompat.widget.SearchView
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.Observer
-import androidx.paging.LivePagedListBuilder
-import androidx.paging.PagedList
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchKeyword
-import io.legado.app.data.entities.SearchShow
 import io.legado.app.help.IntentDataHelp
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.ui.book.info.BookInfoActivity
 import io.legado.app.ui.book.source.manage.BookSourceActivity
+import io.legado.app.ui.widget.LoadMoreView
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_book_search.*
 import kotlinx.android.synthetic.main.view_search.*
@@ -31,6 +30,7 @@ import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.startActivity
 
 class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_search),
+    SearchViewModel.CallBack,
     BookAdapter.CallBack,
     HistoryKeyAdapter.CallBack,
     SearchAdapter.CallBack {
@@ -38,10 +38,10 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
     override val viewModel: SearchViewModel
         get() = getViewModel(SearchViewModel::class.java)
 
-    private lateinit var adapter: SearchAdapter
+    override lateinit var adapter: SearchAdapter
     private lateinit var bookAdapter: BookAdapter
     private lateinit var historyKeyAdapter: HistoryKeyAdapter
-    private var searchBookData: LiveData<PagedList<SearchShow>>? = null
+    private lateinit var loadMoreView: LoadMoreView
     private var historyData: LiveData<List<SearchKeyword>>? = null
     private var bookData: LiveData<List<Book>>? = null
     private var menu: Menu? = null
@@ -49,6 +49,7 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
     private var groups = hashSetOf<String>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        viewModel.callBack = this
         initRecyclerView()
         initSearchView()
         initOtherView()
@@ -59,7 +60,7 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.book_search, menu)
         precisionSearchMenuItem = menu.findItem(R.id.menu_precision_search)
-        precisionSearchMenuItem?.isChecked = getPrefBoolean("precisionSearch")
+        precisionSearchMenuItem?.isChecked = getPrefBoolean(PreferKey.precisionSearch)
         this.menu = menu
         upGroupMenu()
         return super.onCompatCreateOptionsMenu(menu)
@@ -68,8 +69,11 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_precision_search -> {
-                putPrefBoolean("precisionSearch", !getPrefBoolean("precisionSearch"))
-                precisionSearchMenuItem?.isChecked = getPrefBoolean("precisionSearch")
+                putPrefBoolean(
+                    PreferKey.precisionSearch,
+                    !getPrefBoolean(PreferKey.precisionSearch)
+                )
+                precisionSearchMenuItem?.isChecked = getPrefBoolean(PreferKey.precisionSearch)
             }
             R.id.menu_source_manage -> startActivity<BookSourceActivity>()
             else -> if (item.groupId == R.id.source_group) {
@@ -133,9 +137,10 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
         historyKeyAdapter = HistoryKeyAdapter(this, this)
         rv_history_key.layoutManager = LinearLayoutManager(this, RecyclerView.HORIZONTAL, false)
         rv_history_key.adapter = historyKeyAdapter
-        adapter = SearchAdapter(this)
+        adapter = SearchAdapter(this, this)
         recycler_view.layoutManager = LinearLayoutManager(this)
         recycler_view.adapter = adapter
+        loadMoreView = LoadMoreView(this)
     }
 
     private fun initOtherView() {
@@ -147,14 +152,6 @@ class SearchActivity : VMBaseActivity<SearchViewModel>(R.layout.activity_book_se
     }
 
     private fun initData() {
-        searchBookData?.removeObservers(this)
-        searchBookData = LivePagedListBuilder(
-            App.db.searchBookDao().observeShow(
-                viewModel.searchKey,
-                viewModel.startTime
-            ), 30
-        ).build()
-        searchBookData?.observe(this, Observer { adapter.submitList(it) })
         App.db.bookSourceDao().liveGroupEnabled().observe(this, Observer {
             groups.clear()
             it.map { group ->
