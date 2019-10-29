@@ -34,6 +34,8 @@ class RotateLoading : View {
 
     private var shadowPosition: Int = 0
 
+    var hideMode = GONE
+
     var isStarted = false
         private set
 
@@ -78,6 +80,10 @@ class RotateLoading : View {
             )
             shadowPosition = typedArray.getInt(R.styleable.RotateLoading_shadow_position, DEFAULT_SHADOW_POSITION)
             speedOfDegree = typedArray.getInt(R.styleable.RotateLoading_loading_speed, DEFAULT_SPEED_OF_DEGREE)
+            hideMode = when (typedArray.getInt(R.styleable.RotateLoading_hide_mode, 2)) {
+                1 -> INVISIBLE
+                else -> GONE
+            }
             typedArray.recycle()
         }
         speedOfArc = (speedOfDegree / 4).toFloat()
@@ -176,10 +182,10 @@ class RotateLoading : View {
         post(shown)
     }
 
-    fun hide(visibility: Int = INVISIBLE) {
+    fun hide() {
         removeCallbacks(shown)
         removeCallbacks(hidden)
-        stopInternal(visibility)
+        stopInternal()
     }
 
     private fun startInternal() {
@@ -188,8 +194,8 @@ class RotateLoading : View {
         invalidate()
     }
 
-    private fun stopInternal(visibility: Int = INVISIBLE) {
-        stopAnimator(visibility)
+    private fun stopInternal() {
+        stopAnimator()
         invalidate()
     }
 
@@ -205,10 +211,10 @@ class RotateLoading : View {
             .start()
     }
 
-    private fun stopAnimator(visibility: Int = INVISIBLE) {
+    private fun stopAnimator() {
         animate().cancel()
         isStarted = false
-        this.visibility = visibility
+        this.visibility = hideMode
     }
 
     companion object {

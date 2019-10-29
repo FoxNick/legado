@@ -68,6 +68,7 @@ object BookChapterList {
                         }
                     }
             }
+            SourceDebug.printLog(bookSource.bookSourceUrl, "下一页数量${nextUrlList.size}")
         } else if (chapterData.nextUrl.size > 1) {
             val chapterDataList = arrayListOf<ChapterData<String>>()
             for (item in chapterData.nextUrl) {
@@ -132,9 +133,10 @@ object BookChapterList {
         val nextUrlList = arrayListOf<String>()
         val analyzeRule = AnalyzeRule(book)
         analyzeRule.setContent(body, baseUrl)
-        if (getNextUrl) {
+        val nextTocRule = tocRule.nextTocUrl
+        if (getNextUrl && !nextTocRule.isNullOrEmpty()) {
             SourceDebug.printLog(bookSource.bookSourceUrl, "获取目录下一页列表", printLog)
-            analyzeRule.getStringList(tocRule.nextTocUrl ?: "", true)?.let {
+            analyzeRule.getStringList(nextTocRule, true)?.let {
                 for (item in it) {
                     if (item != baseUrl) {
                         nextUrlList.add(item)
