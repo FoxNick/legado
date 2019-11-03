@@ -10,6 +10,7 @@ import io.legado.app.model.webbook.BookChapterList
 import io.legado.app.model.webbook.BookContent
 import io.legado.app.model.webbook.BookInfo
 import io.legado.app.model.webbook.BookList
+import io.legado.app.utils.NetworkUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
@@ -37,8 +38,14 @@ class WebBook(val bookSource: BookSource) {
                     baseUrl = sourceUrl,
                     headerMapF = bookSource.getHeaderMap()
                 )
-                val response = analyzeUrl.getResponseAsync().await()
-                BookList.analyzeBookList(response, bookSource, analyzeUrl, true)
+                val response = analyzeUrl.getResponseAwait()
+                BookList.analyzeBookList(
+                    response.body(),
+                    bookSource,
+                    analyzeUrl,
+                    NetworkUtils.getUrl(response),
+                    true
+                )
             } ?: arrayListOf()
         }
     }
@@ -59,8 +66,14 @@ class WebBook(val bookSource: BookSource) {
                 baseUrl = sourceUrl,
                 headerMapF = bookSource.getHeaderMap()
             )
-            val response = analyzeUrl.getResponseAsync().await()
-            BookList.analyzeBookList(response, bookSource, analyzeUrl, false)
+            val response = analyzeUrl.getResponseAwait()
+            BookList.analyzeBookList(
+                response.body(),
+                bookSource,
+                analyzeUrl,
+                NetworkUtils.getUrl(response),
+                false
+            )
         }
     }
 
@@ -73,16 +86,20 @@ class WebBook(val bookSource: BookSource) {
         context: CoroutineContext = Dispatchers.IO
     ): Coroutine<Book> {
         return Coroutine.async(scope, context) {
-            val body = if (book.infoHtml.isNullOrEmpty()) {
+            val body = if (!book.infoHtml.isNullOrEmpty()) {
+                book.infoHtml
+            } else {
                 val analyzeUrl = AnalyzeUrl(
                     book = book,
                     ruleUrl = book.bookUrl,
                     baseUrl = sourceUrl,
                     headerMapF = bookSource.getHeaderMap()
                 )
-                analyzeUrl.getResponseAsync().await().body()
-            } else {
-                book.infoHtml
+                if (analyzeUrl.useWebView()) {
+                    analyzeUrl.getResultByWebView(bookSource.bookSourceUrl)
+                } else {
+                    analyzeUrl.getResponseAwait().body()
+                }
             }
             BookInfo.analyzeBookInfo(book, body, bookSource, book.bookUrl)
             book
@@ -107,7 +124,11 @@ class WebBook(val bookSource: BookSource) {
                     baseUrl = book.bookUrl,
                     headerMapF = bookSource.getHeaderMap()
                 )
-                analyzeUrl.getResponseAsync().await().body()
+                if (analyzeUrl.useWebView()) {
+                    analyzeUrl.getResultByWebView(bookSource.bookSourceUrl)
+                } else {
+                    analyzeUrl.getResponseAwait().body()
+                }
             }
             BookChapterList.analyzeChapterList(this, book, body, bookSource, book.tocUrl)
         }
@@ -124,6 +145,9 @@ class WebBook(val bookSource: BookSource) {
         context: CoroutineContext = Dispatchers.IO
     ): Coroutine<String> {
         return Coroutine.async(scope, context) {
+            if (bookSource.getContentRule().content.isNullOrEmpty()) {
+                return@async bookChapter.url
+            }
             val body = if (bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
                 book.tocHtml
             } else {
@@ -134,7 +158,11 @@ class WebBook(val bookSource: BookSource) {
                         baseUrl = book.tocUrl,
                         headerMapF = bookSource.getHeaderMap()
                     )
-                analyzeUrl.getResponseAsync().await().body()
+                if (analyzeUrl.useWebView()) {
+                    analyzeUrl.getResultByWebView(bookSource.bookSourceUrl)
+                } else {
+                    analyzeUrl.getResponseAwait().body()
+                }
             }
             BookContent.analyzeContent(
                 this,

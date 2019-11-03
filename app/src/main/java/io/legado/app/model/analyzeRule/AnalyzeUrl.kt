@@ -10,9 +10,10 @@ import io.legado.app.data.api.IHttpGetApi
 import io.legado.app.data.api.IHttpPostApi
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.http.AjaxWebView
 import io.legado.app.help.http.HttpHelper
+import io.legado.app.help.http.RequestMethod
 import io.legado.app.utils.*
-import kotlinx.coroutines.Deferred
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
@@ -54,19 +55,10 @@ class AnalyzeUrl(
     private val headerMap = HashMap<String, String>()
     private var charset: String? = null
     private var bodyTxt: String? = null
-    private lateinit var body: RequestBody
-    private var method = Method.GET
-
-    val postData: ByteArray
-        get() {
-            val builder = StringBuilder()
-            val keys = fieldMap.keys
-            for (key in keys) {
-                builder.append(String.format("%s=%s&", key, fieldMap[key]))
-            }
-            builder.deleteCharAt(builder.lastIndexOf("&"))
-            return builder.toString().toByteArray()
-        }
+    private var body: RequestBody? = null
+    private var method = RequestMethod.GET
+    private var webViewJs: String? = null
+    private var sourceRegex: String? = null
 
     init {
         baseUrl?.let {
@@ -172,23 +164,25 @@ class AnalyzeUrl(
         if (urlArray.size > 1) {
             val options = GSON.fromJsonObject<Map<String, String>>(urlArray[1])
             options?.let {
-                options["method"]?.let { if (it.equals("POST", true)) method = Method.POST }
+                options["method"]?.let { if (it.equals("POST", true)) method = RequestMethod.POST }
                 options["headers"]?.let { headers ->
                     GSON.fromJsonObject<Map<String, String>>(headers)?.let { headerMap.putAll(it) }
                 }
                 options["body"]?.let { bodyTxt = it }
                 options["charset"]?.let { charset = it }
+                options["js"]?.let { webViewJs = it }
+                options["sourceRegex"]?.let { sourceRegex = it }
             }
         }
         when (method) {
-            Method.GET -> {
+            RequestMethod.GET -> {
                 urlArray = url.split("?")
                 url = urlArray[0]
                 if (urlArray.size > 1) {
                     analyzeFields(urlArray[1])
                 }
             }
-            Method.POST -> {
+            RequestMethod.POST -> {
                 bodyTxt?.let {
                     if (it.isJson()) {
                         body = it.toRequestBody(jsonType)
@@ -248,13 +242,10 @@ class AnalyzeUrl(
         return SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 
-    enum class Method {
-        GET, POST
-    }
-
+    @Throws(Exception::class)
     fun getResponse(): Call<String> {
         return when {
-            method == Method.POST -> {
+            method == RequestMethod.POST -> {
                 if (fieldMap.isNotEmpty()) {
                     HttpHelper
                         .getApiService<IHttpPostApi>(baseUrl)
@@ -262,7 +253,7 @@ class AnalyzeUrl(
                 } else {
                     HttpHelper
                         .getApiService<IHttpPostApi>(baseUrl)
-                        .postBody(url, body, headerMap)
+                        .postBody(url, body!!, headerMap)
                 }
             }
             fieldMap.isEmpty() -> HttpHelper
@@ -274,25 +265,46 @@ class AnalyzeUrl(
         }
     }
 
-    fun getResponseAsync(): Deferred<Response<String>> {
+    @Throws(Exception::class)
+    suspend fun getResponseAwait(): Response<String> {
         return when {
-            method == Method.POST -> {
+            method == RequestMethod.POST -> {
                 if (fieldMap.isNotEmpty()) {
                     HttpHelper
                         .getApiService<IHttpPostApi>(baseUrl)
                         .postMapAsync(url, fieldMap, headerMap)
+                        .await()
                 } else {
                     HttpHelper
                         .getApiService<IHttpPostApi>(baseUrl)
-                        .postBodyAsync(url, body, headerMap)
+                        .postBodyAsync(url, body!!, headerMap)
+                        .await()
                 }
             }
             fieldMap.isEmpty() -> HttpHelper
                 .getApiService<IHttpGetApi>(baseUrl)
                 .getAsync(url, headerMap)
+                .await()
             else -> HttpHelper
                 .getApiService<IHttpGetApi>(baseUrl)
                 .getMapAsync(url, fieldMap, headerMap)
+                .await()
         }
     }
+
+    fun useWebView(): Boolean {
+        return webViewJs != null || sourceRegex != null
+    }
+
+    suspend fun getResultByWebView(tag: String): String {
+        val params = AjaxWebView.AjaxParams(tag)
+        params.url = url
+        params.headerMap = headerMap
+        params.requestMethod = method
+        params.javaScript = webViewJs
+        params.sourceRegex = sourceRegex
+        params.postData = bodyTxt?.toByteArray()
+        return HttpHelper.ajax(params)
+    }
+
 }

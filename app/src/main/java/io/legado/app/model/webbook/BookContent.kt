@@ -31,7 +31,7 @@ object BookContent {
                 baseUrl
             )
         )
-        SourceDebug.printLog(bookSource.bookSourceUrl, "获取成功:${baseUrl}")
+        SourceDebug.printLog(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         val content = StringBuilder()
         val nextUrlList = arrayListOf(baseUrl)
         val contentRule = bookSource.getContentRule()
@@ -53,7 +53,7 @@ object BookContent {
                     ruleUrl = nextUrl,
                     book = book,
                     headerMapF = bookSource.getHeaderMap()
-                ).getResponseAsync().await()
+                ).getResponseAwait()
                     .body()?.let { nextBody ->
                         contentData =
                             analyzeContent(nextBody, contentRule, book, bookSource, baseUrl, false)
@@ -62,7 +62,7 @@ object BookContent {
                         content.append(contentData.content)
                     }
             }
-            SourceDebug.printLog(bookSource.bookSourceUrl, "下一页数量${nextUrlList.size}")
+            SourceDebug.printLog(bookSource.bookSourceUrl, "◇本章总页数:${nextUrlList.size}")
         } else if (contentData.nextUrl.size > 1) {
             val contentDataList = arrayListOf<ContentData<String>>()
             for (item in contentData.nextUrl) {
@@ -75,7 +75,7 @@ object BookContent {
                         ruleUrl = item.nextUrl,
                         book = book,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getResponseAsync().await()
+                    ).getResponseAwait()
                         .body()?.let {
                             contentData =
                                 analyzeContent(
@@ -92,13 +92,6 @@ object BookContent {
             }
             for (item in contentDataList) {
                 content.append(item.content)
-            }
-        }
-        if (content.isNotEmpty()) {
-            if (!content[0].toString().startsWith(bookChapter.title)) {
-                content
-                    .insert(0, "\n")
-                    .insert(0, bookChapter.title)
             }
         }
         return content.toString()
@@ -118,11 +111,11 @@ object BookContent {
         analyzeRule.setContent(body, baseUrl)
         val nextUrlRule = contentRule.nextContentUrl
         if (!nextUrlRule.isNullOrEmpty()) {
-            SourceDebug.printLog(bookSource.bookSourceUrl, "获取下一页URL", printLog)
+            SourceDebug.printLog(bookSource.bookSourceUrl, "┌获取正文下一页链接", printLog)
             analyzeRule.getStringList(nextUrlRule, true)?.let {
                 nextUrlList.addAll(it)
             }
-            SourceDebug.printLog(bookSource.bookSourceUrl, nextUrlList.joinToString(","))
+            SourceDebug.printLog(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"), printLog)
         }
         val content = analyzeRule.getString(contentRule.content ?: "")?.htmlFormat() ?: ""
         return ContentData(content, nextUrlList)
