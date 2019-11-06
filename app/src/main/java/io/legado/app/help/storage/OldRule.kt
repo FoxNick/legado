@@ -1,5 +1,6 @@
 package io.legado.app.help.storage
 
+import io.legado.app.constant.AppConst
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.*
 import io.legado.app.help.storage.Restore.jsonPath
@@ -16,12 +17,12 @@ object OldRule {
     fun jsonToBookSource(json: String): BookSource? {
         var source: BookSource? = null
         runCatching {
-            source = GSON.fromJsonObject<BookSource>(json)
+            source = GSON.fromJsonObject<BookSource>(json.trim())
         }
         runCatching {
             if (source == null || source?.searchUrl.isNullOrBlank()) {
                 source = BookSource().apply {
-                    val jsonItem = jsonPath.parse(json)
+                    val jsonItem = jsonPath.parse(json.trim())
                     bookSourceUrl = jsonItem.readString("bookSourceUrl") ?: ""
                     bookSourceName = jsonItem.readString("bookSourceName") ?: ""
                     bookSourceGroup = jsonItem.readString("bookSourceGroup") ?: ""
@@ -30,7 +31,7 @@ object OldRule {
                     customOrder = jsonItem.readInt("serialNumber") ?: 0
                     header = uaToHeader(jsonItem.readString("httpUserAgent"))
                     searchUrl = toNewUrl(jsonItem.readString("ruleSearchUrl"))
-                    exploreUrl = toNewUrl(jsonItem.readString("ruleFindUrl"))
+                    exploreUrl = toNewUrls(jsonItem.readString("ruleFindUrl"))
                     if (exploreUrl.isNullOrBlank()) {
                         enabledExplore = false
                     }
@@ -74,8 +75,12 @@ object OldRule {
                         nextTocUrl = jsonItem.readString("ruleChapterUrlNext")
                     )
                     ruleToc = GSON.toJson(chapterRule)
+                    var content = jsonItem.readString("ruleBookContent") ?: ""
+                    if (content.startsWith("$") && !content.startsWith("$.")) {
+                        content = content.substring(1)
+                    }
                     val contentRule = ContentRule(
-                        content = jsonItem.readString("ruleBookContent"),
+                        content = content,
                         nextContentUrl = jsonItem.readString("ruleContentUrlNext")
                     )
                     ruleContent = GSON.toJson(contentRule)
@@ -83,6 +88,19 @@ object OldRule {
             }
         }
         return source
+    }
+
+    private fun toNewUrls(oldUrl: String?): String? {
+        if (oldUrl == null) return null
+        if (!oldUrl.contains("\n") && !oldUrl.contains("&&"))
+            return toNewUrl(oldUrl)
+
+        val urls = oldUrl.split("(&&|\n)+".toRegex())
+        var newUrl = ""
+        for (url in urls) {
+            newUrl += toNewUrl(url)?.replace("\\n\\s*".toRegex(),"") + "\n"
+        }
+        return newUrl
     }
 
     private fun toNewUrl(oldUrl: String?): String? {
@@ -113,7 +131,9 @@ object OldRule {
         }
         url = url.replace("{", "<").replace("}", ">")
         url = url.replace("searchKey", "{{key}}")
-        url = url.replace("searchPage", "{{page}}")
+        url = url.replace("<searchPage([-+]1)>".toRegex(), "{{page$1}}")
+                .replace("searchPage([-+]1)".toRegex(), "{{page$1}}")
+                .replace("searchPage", "{{page}}")
         for ((index, item) in jsList.withIndex()) {
             url = url.replace("$$index", item.replace("searchKey", "key").replace("searchPage", "page"))
         }
@@ -131,7 +151,7 @@ object OldRule {
 
     private fun uaToHeader(ua: String?): String? {
         if (ua.isNullOrEmpty()) return null
-        val map = mapOf(Pair("User-Agent", ua))
+        val map = mapOf(Pair(AppConst.UA_NAME, ua))
         return GSON.toJson(map)
     }
 

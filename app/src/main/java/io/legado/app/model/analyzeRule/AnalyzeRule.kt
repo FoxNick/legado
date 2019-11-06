@@ -351,6 +351,9 @@ class AnalyzeRule(private var book: BaseBook? = null) {
         //检测Mode
         var mMode: Mode = mode
         when {
+            vRuleStr.startsWith("@@") -> {
+                vRuleStr = vRuleStr.substring(2)
+            }
             vRuleStr.startsWith("@XPath:", true) -> {
                 mMode = Mode.XPath
                 vRuleStr = vRuleStr.substring(7)
@@ -394,7 +397,7 @@ class AnalyzeRule(private var book: BaseBook? = null) {
     /**
      * 规则类
      */
-    inner class SourceRule internal constructor(ruleStr: String, mainMode: Mode) {
+    inner class SourceRule internal constructor(ruleStr: String, mainMode: Mode = Mode.Default) {
         internal var mode: Mode
         internal var rule: String
         internal var replaceRegex = ""
@@ -414,6 +417,14 @@ class AnalyzeRule(private var book: BaseBook? = null) {
                 }
             } else {
                 when {
+                    ruleStr.startsWith("@CSS:", true) -> {
+                        mode = Mode.Default
+                        rule = ruleStr
+                    }
+                    ruleStr.startsWith("@@") -> {
+                        mode = Mode.Default
+                        rule = ruleStr.substring(2)
+                    }
                     ruleStr.startsWith("@XPath:", true) -> {
                         mode = Mode.XPath
                         rule = ruleStr.substring(7)
@@ -436,8 +447,15 @@ class AnalyzeRule(private var book: BaseBook? = null) {
             //分离put
             rule = splitPutRule(rule, putMap)
             //分离正则表达式
-            val ruleStrS = rule.trim { it <= ' ' }.split("##")
-            rule = ruleStrS[0]
+            val index = rule.indexOf("}}")
+            var rule1 = ""
+            var rule2 = rule
+            if (index > 0) {
+                rule1 = rule.substring(0, index)
+                rule2 = rule.substring(index)
+            }
+            val ruleStrS = rule2.trim { it <= ' ' }.split("##")
+            rule = rule1 + ruleStrS[0]
             if (ruleStrS.size > 1) {
                 replaceRegex = ruleStrS[1]
             }
@@ -509,16 +527,21 @@ class AnalyzeRule(private var book: BaseBook? = null) {
                             }
                         }
                         regType == -1 -> {
-                            val jsEval: Any? = evalJS(ruleParam[index], result)
-                            when {
-                                jsEval == null -> {
+                            if (isRule(ruleParam[index])) {
+                                getString(arrayListOf(SourceRule(ruleParam[index]))).let {
+                                    infoVal.insert(0, it)
                                 }
-                                jsEval is String -> infoVal.insert(0, jsEval)
-                                jsEval is Double && jsEval % 1.0 == 0.0 -> infoVal.insert(
-                                    0,
-                                    String.format("%.0f", jsEval)
-                                )
-                                else -> infoVal.insert(0, jsEval.toString())
+                            } else {
+                                val jsEval: Any? = evalJS(ruleParam[index], result)
+                                when {
+                                    jsEval == null -> Unit
+                                    jsEval is String -> infoVal.insert(0, jsEval)
+                                    jsEval is Double && jsEval % 1.0 == 0.0 -> infoVal.insert(
+                                        0,
+                                        String.format("%.0f", jsEval)
+                                    )
+                                    else -> infoVal.insert(0, jsEval.toString())
+                                }
                             }
                         }
                         regType == -2 -> {
@@ -528,6 +551,18 @@ class AnalyzeRule(private var book: BaseBook? = null) {
                     }
                 }
                 rule = infoVal.toString()
+            }
+        }
+
+        private fun isRule(ruleStr: String): Boolean {
+            return when {
+                ruleStr.startsWith("$.") -> true
+                ruleStr.startsWith("@XPath:", true) -> true
+                ruleStr.startsWith("//") -> true
+                ruleStr.startsWith("@Json:", true) -> true
+                ruleStr.startsWith("@CSS:", true) -> true
+                ruleStr.startsWith("@@") -> true
+                else -> false
             }
         }
     }

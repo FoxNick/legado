@@ -35,7 +35,7 @@ interface BookDao {
     @get:Query("SELECT * FROM books")
     val allBooks: List<Book>
 
-    @get:Query("SELECT * FROM books ORDER BY durChapterTime DESC limit 1")
+    @get:Query("SELECT * FROM books where type = 0 ORDER BY durChapterTime DESC limit 1")
     val lastReadBook: Book?
 
     @get:Query("SELECT bookUrl FROM books")
@@ -53,4 +53,6 @@ interface BookDao {
     @Query("delete from books where bookUrl = :bookUrl")
     fun delete(bookUrl: String)
 
+    @Query("update books set durChapterPos = :pos where bookUrl = :bookUrl")
+    fun upProgress(bookUrl: String, pos: Int)
 }

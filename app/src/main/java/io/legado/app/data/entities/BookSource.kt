@@ -48,28 +48,28 @@ data class BookSource(
 ) : Parcelable {
     @Ignore
     @IgnoredOnParcel
-    var searchRuleV: SearchRule? = null
+    private var searchRuleV: SearchRule? = null
 
     @Ignore
     @IgnoredOnParcel
-    var exploreRuleV: ExploreRule? = null
+    private var exploreRuleV: ExploreRule? = null
 
     @Ignore
     @IgnoredOnParcel
-    var bookInfoRuleV: BookInfoRule? = null
+    private var bookInfoRuleV: BookInfoRule? = null
 
     @Ignore
     @IgnoredOnParcel
-    var tocRuleV: TocRule? = null
+    private var tocRuleV: TocRule? = null
 
     @Ignore
     @IgnoredOnParcel
-    var contentRuleV: ContentRule? = null
+    private var contentRuleV: ContentRule? = null
 
     @Throws(Exception::class)
     fun getHeaderMap(): Map<String, String> {
         val headerMap = HashMap<String, String>()
-        headerMap["User-Agent"] = App.INSTANCE.getPrefString("user_agent") ?: userAgent
+        headerMap[AppConst.UA_NAME] = App.INSTANCE.getPrefString("user_agent") ?: userAgent
         header?.let {
             val header1 = when {
                 it.startsWith("@js:", true) ->
@@ -167,6 +167,29 @@ data class BookSource(
         val bindings = SimpleBindings()
         bindings["java"] = JsExtensions
         return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
+    }
+
+    fun equal(source: BookSource?): Boolean {
+        if (source == null) {
+            return false
+        }
+        return bookSourceName == source.bookSourceName
+                && bookSourceUrl == source.bookSourceUrl
+                && bookSourceGroup == source.bookSourceGroup
+                && bookSourceType == source.bookSourceType
+                && bookUrlPattern == source.bookUrlPattern
+                && enabled == source.enabled
+                && enabledExplore == source.enabledExplore
+                && header == source.header
+                && loginUrl == source.loginUrl
+                && lastUpdateTime == source.lastUpdateTime
+                && exploreUrl == source.exploreUrl
+                && searchUrl == source.searchUrl
+                && ruleSearch == source.ruleSearch
+                && ruleExplore == source.ruleExplore
+                && ruleBookInfo == source.ruleBookInfo
+                && ruleToc == source.ruleToc
+                && ruleContent == source.ruleContent
     }
 
     data class ExploreKind(

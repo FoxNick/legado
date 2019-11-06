@@ -12,6 +12,7 @@ import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.Bus
+import io.legado.app.help.ActivityHelp
 import io.legado.app.help.permission.Permissions
 import io.legado.app.help.permission.PermissionsCompat
 import io.legado.app.lib.dialogs.alert
@@ -103,7 +104,21 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         return super.onKeyUp(keyCode, event)
     }
 
-    private inner class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
+    override fun finish() {
+        if (ActivityHelp.size() > 1) {
+            moveTaskToBack(true)
+        } else {
+            super.finish()
+        }
+    }
+
+    override fun observeLiveBus() {
+        observeEvent<String>(Bus.RECREATE) {
+            recreate()
+        }
+    }
+
+    private class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
         FragmentPagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
         override fun getItem(position: Int): Fragment {
@@ -118,12 +133,6 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         override fun getCount(): Int {
             return 4
         }
-
-    }
-
-    override fun observeLiveBus() {
-        observeEvent<String>(Bus.RECREATE) {
-            recreate()
-        }
     }
 }
+

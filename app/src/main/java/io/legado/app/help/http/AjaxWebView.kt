@@ -9,6 +9,8 @@ import android.os.Message
 import android.text.TextUtils
 import android.webkit.*
 import io.legado.app.App
+import io.legado.app.constant.AppConst
+import org.apache.commons.text.StringEscapeUtils
 import java.lang.ref.WeakReference
 
 
@@ -100,7 +102,7 @@ class AjaxWebView {
         var javaScript: String? = null
 
         val userAgent: String?
-            get() = this.headerMap?.get("User-Agent")
+            get() = this.headerMap?.get(AppConst.UA_NAME)
 
         val isSniff: Boolean
             get() = !TextUtils.isEmpty(sourceRegex)
@@ -131,7 +133,7 @@ class AjaxWebView {
             params.setCookie(url)
             handler.postDelayed({
                 view.evaluateJavascript("document.documentElement.outerHTML") {
-                    handler.obtainMessage(MSG_SUCCESS, it)
+                    handler.obtainMessage(MSG_SUCCESS, StringEscapeUtils.unescapeJson(it))
                         .sendToTarget()
                 }
             }, 1000)
@@ -158,8 +160,7 @@ class AjaxWebView {
                 handler.obtainMessage(
                     MSG_ERROR,
                     Exception(error.description.toString())
-                )
-                    .sendToTarget()
+                ).sendToTarget()
             }
         }
 
@@ -203,8 +204,7 @@ class AjaxWebView {
                 handler.obtainMessage(
                     MSG_ERROR,
                     Exception(error.description.toString())
-                )
-                    .sendToTarget()
+                ).sendToTarget()
             }
         }
 
@@ -247,9 +247,7 @@ class AjaxWebView {
     }
 
     abstract class Callback {
-
         abstract fun onResult(result: String)
-
         abstract fun onError(error: Throwable)
     }
 }

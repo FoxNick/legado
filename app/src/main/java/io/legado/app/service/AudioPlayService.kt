@@ -19,14 +19,19 @@ import io.legado.app.base.BaseService
 import io.legado.app.constant.Action
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.Bus
+import io.legado.app.constant.Status
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
 import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.utils.LogUtils
 import io.legado.app.utils.postEvent
+import kotlinx.coroutines.launch
+import org.jetbrains.anko.toast
 
 
-class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
+class AudioPlayService : BaseService(),
+    AudioManager.OnAudioFocusChangeListener,
     MediaPlayer.OnPreparedListener,
     MediaPlayer.OnErrorListener,
     MediaPlayer.OnCompletionListener {
@@ -46,7 +51,8 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
     private var mediaSessionCompat: MediaSessionCompat? = null
     private var broadcastReceiver: BroadcastReceiver? = null
     private var position = 0
-    private val dsRunnable: Runnable? = Runnable { doDs() }
+    private val dsRunnable: Runnable = Runnable { doDs() }
+    private var mpRunnable: Runnable = Runnable { upPlayProgress() }
 
     override fun onCreate() {
         super.onCreate()
@@ -58,6 +64,7 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
         mediaPlayer.setOnCompletionListener(this)
         initMediaSession()
         initBroadcastReceiver()
+        upNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
     }
 
@@ -67,13 +74,14 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
                 Action.play -> {
                     title = intent.getStringExtra("title") ?: ""
                     subtitle = intent.getStringExtra("subtitle") ?: ""
-                    position = intent.getIntExtra("pageIndex", 0)
-                    play(intent.getStringExtra("dataKey"))
+                    position = intent.getIntExtra("position", 0)
+                    play(intent.getStringExtra("url"))
                 }
                 Action.pause -> pause(true)
                 Action.resume -> resume()
                 Action.addTimer -> addTimer()
                 Action.setTimer -> setTimer(intent.getIntExtra("minute", 0))
+                Action.adjustProgress -> adjustProgress(intent.getIntExtra("position", position))
                 else -> stopSelf()
             }
         }
@@ -83,35 +91,81 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
     override fun onDestroy() {
         super.onDestroy()
         isRun = false
+        handler.removeCallbacks(dsRunnable)
+        handler.removeCallbacks(mpRunnable)
+        mediaPlayer.release()
         mediaSessionCompat?.release()
+        unregisterReceiver(broadcastReceiver)
+        upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
+        postEvent(Bus.AUDIO_STATE, Status.STOP)
     }
 
     private fun play(url: String) {
-
+        upNotification()
+        if (requestFocus()) {
+            try {
+                postEvent(Bus.AUDIO_STATE, Status.PLAY)
+                mediaPlayer.reset()
+                mediaPlayer.setDataSource(url)
+                mediaPlayer.prepareAsync()
+            } catch (e: Exception) {
+                LogUtils.d("AudioPlayService", e.localizedMessage + " " + url)
+                launch {
+                    toast(e.localizedMessage + " " + url)
+                    stopSelf()
+                }
+            }
+        }
     }
 
     private fun pause(pause: Boolean) {
         this.pause = pause
+        handler.removeCallbacks(mpRunnable)
+        position = mediaPlayer.currentPosition
         mediaPlayer.pause()
+        upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
+        postEvent(Bus.AUDIO_STATE, Status.PAUSE)
+        upNotification()
     }
 
     private fun resume() {
         pause = false
         mediaPlayer.start()
+        mediaPlayer.seekTo(position)
+        handler.removeCallbacks(mpRunnable)
+        handler.postDelayed(mpRunnable, 1000)
+        upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
+        postEvent(Bus.AUDIO_STATE, Status.PLAY)
+        upNotification()
+    }
+
+    private fun adjustProgress(position: Int) {
+        if (mediaPlayer.isPlaying) {
+            mediaPlayer.seekTo(position)
+        } else {
+            this.position = position
+        }
     }
 
     override fun onPrepared(mp: MediaPlayer?) {
         if (pause) return
         mp?.start()
-
+        mp?.seekTo(position)
+        postEvent(Bus.AUDIO_SIZE, mp?.duration)
+        handler.removeCallbacks(mpRunnable)
+        handler.post(mpRunnable)
     }
 
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
+        launch {
+            toast("error: $what $extra")
+        }
         return true
     }
 
     override fun onCompletion(mp: MediaPlayer?) {
-
+        handler.removeCallbacks(mpRunnable)
+        postEvent(Bus.AUDIO_NEXT, 1)
     }
 
     private fun setTimer(minute: Int) {
@@ -135,6 +189,11 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
         }
         postEvent(Bus.TTS_DS, timeMinute)
         upNotification()
+    }
+
+    private fun upPlayProgress() {
+        postEvent(Bus.AUDIO_PROGRESS, mediaPlayer.currentPosition)
+        handler.postDelayed(mpRunnable, 1000)
     }
 
     /**
@@ -285,6 +344,13 @@ class AudioPlayService : BaseService(), AudioManager.OnAudioFocusChangeListener,
         builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         val notification = builder.build()
         startForeground(112201, notification)
+    }
+
+    /**
+     * @return 音频焦点
+     */
+    private fun requestFocus(): Boolean {
+        return MediaHelp.requestFocus(audioManager, this, mFocusRequest)
     }
 
     private fun thisPendingIntent(action: String): PendingIntent? {
