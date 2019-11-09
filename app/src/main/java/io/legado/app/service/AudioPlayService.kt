@@ -20,12 +20,15 @@ import io.legado.app.constant.Action
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.Bus
 import io.legado.app.constant.Status
+import io.legado.app.data.entities.BookChapter
+import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
 import io.legado.app.receiver.MediaButtonReceiver
-import io.legado.app.ui.book.read.ReadBookActivity
+import io.legado.app.service.help.AudioPlay
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.postEvent
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.launch
 import org.jetbrains.anko.toast
 
@@ -50,6 +53,7 @@ class AudioPlayService : BaseService(),
     private val mediaPlayer = MediaPlayer()
     private var mediaSessionCompat: MediaSessionCompat? = null
     private var broadcastReceiver: BroadcastReceiver? = null
+    private var url: String = ""
     private var position = 0
     private val dsRunnable: Runnable = Runnable { doDs() }
     private var mpRunnable: Runnable = Runnable { upPlayProgress() }
@@ -72,13 +76,17 @@ class AudioPlayService : BaseService(),
         intent?.action?.let { action ->
             when (action) {
                 Action.play -> {
-                    title = intent.getStringExtra("title") ?: ""
-                    subtitle = intent.getStringExtra("subtitle") ?: ""
-                    position = intent.getIntExtra("position", 0)
-                    play(intent.getStringExtra("url"))
+                    AudioPlay.book?.let {
+                        title = it.name
+                        position = it.durChapterPos
+                        loadContent(it.durChapterIndex)
+                    }
                 }
                 Action.pause -> pause(true)
                 Action.resume -> resume()
+                Action.prev -> moveToPrev()
+                Action.next -> moveToNext()
+                Action.moveTo -> loadContent(intent.getIntExtra("index", AudioPlay.durChapterIndex))
                 Action.addTimer -> addTimer()
                 Action.setTimer -> setTimer(intent.getIntExtra("minute", 0))
                 Action.adjustProgress -> adjustProgress(intent.getIntExtra("position", position))
@@ -97,13 +105,16 @@ class AudioPlayService : BaseService(),
         mediaSessionCompat?.release()
         unregisterReceiver(broadcastReceiver)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
+        AudioPlay.status = Status.STOP
         postEvent(Bus.AUDIO_STATE, Status.STOP)
     }
 
-    private fun play(url: String) {
+    private fun play() {
+        postEvent(Bus.AUDIO_SUB_TITLE, subtitle)
         upNotification()
         if (requestFocus()) {
             try {
+                AudioPlay.status = Status.PLAY
                 postEvent(Bus.AUDIO_STATE, Status.PLAY)
                 mediaPlayer.reset()
                 mediaPlayer.setDataSource(url)
@@ -124,6 +135,7 @@ class AudioPlayService : BaseService(),
         position = mediaPlayer.currentPosition
         mediaPlayer.pause()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
+        AudioPlay.status = Status.PAUSE
         postEvent(Bus.AUDIO_STATE, Status.PAUSE)
         upNotification()
     }
@@ -135,6 +147,7 @@ class AudioPlayService : BaseService(),
         handler.removeCallbacks(mpRunnable)
         handler.postDelayed(mpRunnable, 1000)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PLAYING)
+        AudioPlay.status = Status.PLAY
         postEvent(Bus.AUDIO_STATE, Status.PLAY)
         upNotification()
     }
@@ -147,6 +160,9 @@ class AudioPlayService : BaseService(),
         }
     }
 
+    /**
+     * 加载完成
+     */
     override fun onPrepared(mp: MediaPlayer?) {
         if (pause) return
         mp?.start()
@@ -156,16 +172,24 @@ class AudioPlayService : BaseService(),
         handler.post(mpRunnable)
     }
 
+    /**
+     * 播放出错
+     */
     override fun onError(mp: MediaPlayer?, what: Int, extra: Int): Boolean {
+        AudioPlay.status = Status.STOP
+        postEvent(Bus.AUDIO_STATE, Status.STOP)
         launch {
-            toast("error: $what $extra")
+            toast("error: $what $extra $url")
         }
         return true
     }
 
+    /**
+     * 播放结束
+     */
     override fun onCompletion(mp: MediaPlayer?) {
         handler.removeCallbacks(mpRunnable)
-        postEvent(Bus.AUDIO_NEXT, 1)
+        moveToNext()
     }
 
     private fun setTimer(minute: Int) {
@@ -194,6 +218,110 @@ class AudioPlayService : BaseService(),
     private fun upPlayProgress() {
         postEvent(Bus.AUDIO_PROGRESS, mediaPlayer.currentPosition)
         handler.postDelayed(mpRunnable, 1000)
+    }
+
+
+    private fun loadContent(index: Int) {
+        AudioPlay.book?.let { book ->
+            if (addLoading(index)) {
+                launch(IO) {
+                    App.db.bookChapterDao().getChapter(book.bookUrl, index)?.let { chapter ->
+                        BookHelp.getContent(book, chapter)?.let {
+                            contentLoadFinish(chapter, it)
+                            removeLoading(chapter.index)
+                        } ?: download(chapter)
+                    } ?: removeLoading(index)
+                }
+            }
+        }
+    }
+
+    private fun download(chapter: BookChapter) {
+        AudioPlay.book?.let { book ->
+            AudioPlay.webBook?.getContent(book, chapter, scope = this)
+                ?.onSuccess(IO) { content ->
+                    if (content.isNullOrEmpty()) {
+                        contentLoadFinish(chapter, getString(R.string.content_empty))
+                        removeLoading(chapter.index)
+                    } else {
+                        BookHelp.saveContent(book, chapter, content)
+                        contentLoadFinish(chapter, content)
+                        removeLoading(chapter.index)
+                    }
+                }?.onError {
+                    contentLoadFinish(chapter, it.localizedMessage)
+                    removeLoading(chapter.index)
+                }
+        }
+    }
+
+    private fun addLoading(index: Int): Boolean {
+        synchronized(this) {
+            if (AudioPlay.loadingChapters.contains(index)) return false
+            AudioPlay.loadingChapters.add(index)
+            return true
+        }
+    }
+
+    private fun removeLoading(index: Int) {
+        synchronized(this) {
+            AudioPlay.loadingChapters.remove(index)
+        }
+    }
+
+    /**
+     *
+     */
+    private fun contentLoadFinish(chapter: BookChapter, content: String) {
+        if (chapter.index == AudioPlay.durChapterIndex) {
+            subtitle = chapter.title
+            url = content
+            play()
+        }
+    }
+
+    fun moveToPrev() {
+        if (AudioPlay.durChapterIndex > 0) {
+            AudioPlay.durChapterIndex--
+            AudioPlay.durPageIndex = 0
+            AudioPlay.book?.durChapterIndex = AudioPlay.durChapterIndex
+            saveRead()
+            position = 0
+            loadContent(AudioPlay.durChapterIndex)
+        }
+    }
+
+    fun moveToNext() {
+        if (AudioPlay.durChapterIndex < AudioPlay.chapterSize - 1) {
+            AudioPlay.durChapterIndex++
+            AudioPlay.durPageIndex = 0
+            AudioPlay.book?.durChapterIndex = AudioPlay.durChapterIndex
+            saveRead()
+            position = 0
+            loadContent(AudioPlay.durChapterIndex)
+        } else {
+            stopSelf()
+        }
+    }
+
+    private fun saveRead() {
+        launch(IO) {
+            AudioPlay.book?.let { book ->
+                book.lastCheckCount = 0
+                book.durChapterTime = System.currentTimeMillis()
+                book.durChapterIndex = AudioPlay.durChapterIndex
+                book.durChapterPos = AudioPlay.durPageIndex
+                App.db.bookDao().update(book)
+            }
+        }
+    }
+
+    fun saveProgress() {
+        launch(IO) {
+            AudioPlay.book?.let {
+                App.db.bookDao().upProgress(it.bookUrl, AudioPlay.durPageIndex)
+            }
+        }
     }
 
     /**
@@ -311,7 +439,7 @@ class AudioPlayService : BaseService(),
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
             .setContentIntent(
-                IntentHelp.activityPendingIntent<ReadBookActivity>(this, "activity")
+                IntentHelp.activityPendingIntent<AudioPlayService>(this, "activity")
             )
         if (pause) {
             builder.addAction(
@@ -343,7 +471,7 @@ class AudioPlayService : BaseService(),
         )
         builder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         val notification = builder.build()
-        startForeground(112201, notification)
+        startForeground(AppConst.notificationIdAudio, notification)
     }
 
     /**

@@ -8,47 +8,40 @@ import android.widget.SeekBar
 import androidx.lifecycle.Observer
 import com.bumptech.glide.RequestBuilder
 import com.bumptech.glide.request.RequestOptions
-import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.Bus
 import io.legado.app.constant.Status
-import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.BlurTransformation
 import io.legado.app.help.ImageLoader
-import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.noButton
 import io.legado.app.lib.dialogs.okButton
 import io.legado.app.service.help.AudioPlay
 import io.legado.app.ui.chapterlist.ChapterListActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.getViewModel
 import io.legado.app.utils.observeEvent
+import io.legado.app.utils.observeEventSticky
 import kotlinx.android.synthetic.main.activity_audio_play.*
 import kotlinx.android.synthetic.main.view_title_bar.*
 import org.apache.commons.lang3.time.DateFormatUtils
 import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.sdk27.listeners.onLongClick
-import org.jetbrains.anko.startActivity
 import org.jetbrains.anko.startActivityForResult
 
-class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_audio_play),
-    AudioPlayViewModel.CallBack {
+class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_audio_play) {
 
     override val viewModel: AudioPlayViewModel
         get() = getViewModel(AudioPlayViewModel::class.java)
 
     private var requestCodeChapter = 8461
     private var adjustProgress = false
-    private var status = Status.STOP
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         setSupportActionBar(toolbar)
-        viewModel.callBack = this
-        viewModel.titleData.observe(this, Observer { title_bar.title = it })
-        viewModel.coverData.observe(this, Observer { upCover(it) })
+        AudioPlay.titleData.observe(this, Observer { title_bar.title = it })
+        AudioPlay.coverData.observe(this, Observer { upCover(it) })
         viewModel.initData(intent)
         initView()
     }
@@ -62,10 +55,10 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
             true
         }
         iv_skip_next.onClick {
-            viewModel.moveToNext()
+            AudioPlay.next(this)
         }
         iv_skip_previous.onClick {
-            viewModel.moveToPrev()
+            AudioPlay.prev(this)
         }
         player_progress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -82,7 +75,7 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
             }
         })
         iv_chapter.onClick {
-            viewModel.book?.let {
+            AudioPlay.book?.let {
                 startActivityForResult<ChapterListActivity>(
                     requestCodeChapter,
                     Pair("bookUrl", it.bookUrl)
@@ -110,47 +103,31 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
     }
 
     private fun playButton() {
-        when (status) {
+        when (AudioPlay.status) {
             Status.PLAY -> AudioPlay.pause(this)
             Status.PAUSE -> AudioPlay.resume(this)
-            else -> viewModel.loadContent(viewModel.durChapterIndex)
+            else -> AudioPlay.play(this)
         }
     }
 
-    override fun contentLoadFinish(bookChapter: BookChapter, content: String) {
-        AudioPlay.play(
-            this,
-            viewModel.book?.name,
-            bookChapter.title,
-            content,
-            viewModel.durPageIndex
-        )
-        viewModel.loadContent(viewModel.durChapterIndex + 1)
-    }
-
     override fun finish() {
-        viewModel.book?.let {
-            if (!viewModel.inBookshelf) {
+        AudioPlay.book?.let {
+            if (!AudioPlay.inBookshelf) {
                 this.alert(title = getString(R.string.add_to_shelf)) {
                     message = getString(R.string.check_add_bookshelf, it.name)
-                    okButton { viewModel.inBookshelf = true }
+                    okButton { AudioPlay.inBookshelf = true }
                     noButton { viewModel.removeFromBookshelf { super.finish() } }
                 }.show().applyTint()
             } else {
-                if (status == Status.PLAY) {
-                    startActivity<MainActivity>()
-                } else {
-                    super.finish()
-                }
+                super.finish()
             }
         } ?: super.finish()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        AudioPlay.stop(this)
-        if (!BuildConfig.DEBUG) {
-            Backup.autoBackup()
+        if (AudioPlay.status != Status.PLAY) {
+            AudioPlay.stop(this)
         }
     }
 
@@ -158,9 +135,9 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode == Activity.RESULT_OK) {
             when (requestCode) {
-                requestCodeChapter -> data?.getIntExtra("index", viewModel.durChapterIndex)?.let {
-                    if (it != viewModel.durChapterIndex) {
-                        viewModel.loadContent(it)
+                requestCodeChapter -> data?.getIntExtra("index", AudioPlay.durChapterIndex)?.let {
+                    if (it != AudioPlay.durChapterIndex) {
+                        AudioPlay.moveTo(this, it)
                     }
                 }
             }
@@ -168,29 +145,30 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
     }
 
     override fun observeLiveBus() {
-        observeEvent<Boolean>(Bus.AUDIO_PLAY_BUTTON) {
-            playButton()
+        observeEvent<Boolean>(Bus.MEDIA_BUTTON) {
+            if (it) {
+                playButton()
+            }
         }
-        observeEvent<Int>(Bus.AUDIO_NEXT) {
-            viewModel.moveToNext()
-        }
-        observeEvent<Int>(Bus.AUDIO_STATE) {
-            status = it
-            if (status == Status.PLAY) {
+        observeEventSticky<Int>(Bus.AUDIO_STATE) {
+            AudioPlay.status = it
+            if (it == Status.PLAY) {
                 fab_play_stop.setImageResource(R.drawable.ic_pause_24dp)
             } else {
                 fab_play_stop.setImageResource(R.drawable.ic_play_24dp)
             }
         }
-        observeEvent<Int>(Bus.AUDIO_PROGRESS) {
-            viewModel.durPageIndex = it
+        observeEventSticky<Int>(Bus.AUDIO_PROGRESS) {
+            AudioPlay.durPageIndex = it
             if (!adjustProgress) player_progress.progress = it
             tv_dur_time.text = DateFormatUtils.format(it.toLong(), "mm:ss")
-            viewModel.saveProgress()
         }
-        observeEvent<Int>(Bus.AUDIO_SIZE) {
+        observeEventSticky<Int>(Bus.AUDIO_SIZE) {
             player_progress.max = it
             tv_all_time.text = DateFormatUtils.format(it.toLong(), "mm:ss")
+        }
+        observeEventSticky<String>(Bus.AUDIO_SUB_TITLE) {
+            tv_sub_title.text = it
         }
     }
 

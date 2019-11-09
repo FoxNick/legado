@@ -455,7 +455,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     /**
      * 朗读按钮
      */
-    private fun onClickReadAloud() {
+    override fun onClickReadAloud() {
         if (!BaseReadAloudService.isRun) {
             readAloudStatus = Status.STOP
             SystemUtils.ignoreBatteryOptimization(this)
@@ -559,7 +559,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             viewModel.openChapter(it.index)
             page_view.upContent()
         }
-        observeEvent<Boolean>(Bus.READ_ALOUD_BUTTON) {
+        observeEvent<Boolean>(Bus.MEDIA_BUTTON) {
             if (it) {
                 onClickReadAloud()
             } else {

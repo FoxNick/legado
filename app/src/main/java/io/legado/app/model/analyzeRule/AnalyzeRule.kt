@@ -470,6 +470,9 @@ class AnalyzeRule(private var book: BaseBook? = null) {
             var tmp: String
             val evalMatcher = evalPattern.matcher(rule)
             while (evalMatcher.find()) {
+                if (mode != Mode.Js) {
+                    mode = Mode.Regex
+                }
                 if (evalMatcher.start() > start) {
                     tmp = rule.substring(start, evalMatcher.start())
                     ruleType.add(0)
@@ -557,9 +560,9 @@ class AnalyzeRule(private var book: BaseBook? = null) {
         private fun isRule(ruleStr: String): Boolean {
             return when {
                 ruleStr.startsWith("$.") -> true
-                ruleStr.startsWith("@XPath:", true) -> true
-                ruleStr.startsWith("//") -> true
                 ruleStr.startsWith("@Json:", true) -> true
+                ruleStr.startsWith("//") -> true
+                ruleStr.startsWith("@XPath:", true) -> true
                 ruleStr.startsWith("@CSS:", true) -> true
                 ruleStr.startsWith("@@") -> true
                 else -> false

@@ -38,7 +38,7 @@ class AjaxWebView {
                     mWebView = createAjaxWebView(params, this)
                 }
                 MSG_SUCCESS -> {
-                    ajaxWebView.callback?.onResult(msg.obj as String)
+                    ajaxWebView.callback?.onResult(msg.obj as Response)
                     destroyWebView()
                 }
                 MSG_ERROR -> {
@@ -92,14 +92,22 @@ class AjaxWebView {
         mHandler.obtainMessage(DESTROY_WEB_VIEW)
     }
 
-    class AjaxParams(private val tag: String) {
+    class AjaxParams(val url: String, private val tag: String) {
         var requestMethod = RequestMethod.GET
-        var url: String? = null
         var postData: ByteArray? = null
         var headerMap: Map<String, String>? = null
         var cookieStore: CookieStore? = null
         var sourceRegex: String? = null
         var javaScript: String? = null
+
+        fun getJs(): String {
+            javaScript?.let {
+                if (it.isNotEmpty()) {
+                    return it
+                }
+            }
+            return JS
+        }
 
         val userAgent: String?
             get() = this.headerMap?.get(AppConst.UA_NAME)
@@ -124,19 +132,15 @@ class AjaxWebView {
 
     }
 
-    class HtmlWebViewClient(
+    private class HtmlWebViewClient(
         private val params: AjaxParams,
         private val handler: Handler
     ) : WebViewClient() {
 
         override fun onPageFinished(view: WebView, url: String) {
             params.setCookie(url)
-            handler.postDelayed({
-                view.evaluateJavascript("document.documentElement.outerHTML") {
-                    handler.obtainMessage(MSG_SUCCESS, StringEscapeUtils.unescapeJson(it))
-                        .sendToTarget()
-                }
-            }, 1000)
+            val runnable = EvalJsRunnable(view, url, params.getJs(), handler)
+            handler.postDelayed(runnable, 1000)
         }
 
         override fun onReceivedError(
@@ -169,7 +173,37 @@ class AjaxWebView {
         }
     }
 
-    class SnifferWebClient(
+    private class EvalJsRunnable(
+        webView: WebView,
+        private val url: String,
+        private val mJavaScript: String,
+        private val handler: Handler
+    ) : Runnable {
+        var retry = 0
+        private val mWebView: WeakReference<WebView> = WeakReference(webView)
+        override fun run() {
+            mWebView.get()?.evaluateJavascript(mJavaScript) {
+                if (it.isNotEmpty() && it != "null") {
+                    val content = StringEscapeUtils.unescapeJson(it)
+                    handler.obtainMessage(MSG_SUCCESS, Response(url, content))
+                        .sendToTarget()
+                    handler.removeCallbacks(this)
+                    return@evaluateJavascript
+                }
+                if (retry > 30) {
+                    handler.obtainMessage(MSG_ERROR, Exception("time out"))
+                        .sendToTarget()
+                    handler.removeCallbacks(this)
+                    return@evaluateJavascript
+                }
+                retry++
+                handler.removeCallbacks(this)
+                handler.postDelayed(this, 1000)
+            }
+        }
+    }
+
+    private class SnifferWebClient(
         private val params: AjaxParams,
         private val handler: Handler
     ) : WebViewClient() {
@@ -177,7 +211,7 @@ class AjaxWebView {
         override fun onLoadResource(view: WebView, url: String) {
             params.sourceRegex?.let {
                 if (url.matches(it.toRegex())) {
-                    handler.obtainMessage(MSG_SUCCESS, url)
+                    handler.obtainMessage(MSG_SUCCESS, Response(view.url ?: params.url, url))
                         .sendToTarget()
                 }
             }
@@ -221,22 +255,22 @@ class AjaxWebView {
         }
 
         private fun evaluateJavascript(webView: WebView, javaScript: String?) {
-            val runnable = ScriptRunnable(webView, javaScript)
+            val runnable = LoadJsRunnable(webView, javaScript)
             handler.postDelayed(runnable, 1000L)
         }
     }
 
-    class ScriptRunnable(
+    private class LoadJsRunnable(
         webView: WebView,
         private val mJavaScript: String?
     ) : Runnable {
-
         private val mWebView: WeakReference<WebView> = WeakReference(webView)
-
         override fun run() {
             mWebView.get()?.loadUrl("javascript:${mJavaScript ?: ""}")
         }
     }
+
+    data class Response(val url: String, val content: String)
 
     companion object {
         const val MSG_AJAX_START = 0
@@ -244,10 +278,11 @@ class AjaxWebView {
         const val MSG_SUCCESS = 2
         const val MSG_ERROR = 3
         const val DESTROY_WEB_VIEW = 4
+        const val JS = "document.documentElement.outerHTML"
     }
 
     abstract class Callback {
-        abstract fun onResult(result: String)
+        abstract fun onResult(response: Response)
         abstract fun onError(error: Throwable)
     }
 }

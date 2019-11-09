@@ -21,8 +21,6 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.EditEntity
 import io.legado.app.data.entities.rule.*
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.noButton
-import io.legado.app.lib.dialogs.yesButton
 import io.legado.app.lib.theme.ATH
 import io.legado.app.ui.book.source.debug.BookSourceDebugActivity
 import io.legado.app.ui.widget.KeyboardToolPop
@@ -86,7 +84,7 @@ class BookSourceEditActivity :
                     clipboard?.primaryClip = ClipData.newPlainText(null, sourceStr)
                 }
             }
-            R.id.menu_paste_source -> viewModel.pasteSource { upRecyclerView() }
+            R.id.menu_paste_source -> viewModel.pasteSource { upRecyclerView(it) }
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -114,16 +112,13 @@ class BookSourceEditActivity :
 
     override fun finish() {
         val source = getSource()
-        if (!source.equal(viewModel.bookSource)) {
-            alert(R.string.exit_no_save) {
-                yesButton {
-                    if (checkSource(source)) {
-                        viewModel.save(source) {
-                            super.finish()
-                        }
-                    }
+        if (!source.equal(viewModel.bookSource ?: BookSource())) {
+            alert(R.string.exit) {
+                messageResource = R.string.exit_no_save
+                positiveButton(R.string.yes)
+                negativeButton(R.string.no) {
+                    super.finish()
                 }
-                noButton { }
             }.show().applyTint()
         } else {
             super.finish()
@@ -147,8 +142,7 @@ class BookSourceEditActivity :
         recycler_view.scrollToPosition(0)
     }
 
-    private fun upRecyclerView() {
-        val source = viewModel.bookSource
+    private fun upRecyclerView(source: BookSource? = viewModel.bookSource) {
         source?.let {
             cb_is_enable.isChecked = it.enabled
             cb_is_enable_find.isChecked = it.enabledExplore
