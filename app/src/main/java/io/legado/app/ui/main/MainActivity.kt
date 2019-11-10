@@ -68,11 +68,18 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
                         PermissionsCompat.Builder(this@MainActivity)
                             .addPermissions(*Permissions.Group.STORAGE)
                             .rationale(R.string.tip_perm_request_storage)
-                            .onGranted { viewModel.restore() }
+                            .onGranted { viewModel.importYueDuData() }
                             .request()
                     }
-                    noButton { }
+                    noButton {
+                        viewModel.initRssSource()
+                    }
+                    onCancelled {
+                        viewModel.initRssSource()
+                    }
                 }.show().applyTint()
+            } else {
+                viewModel.initRssSource()
             }
         }
     }

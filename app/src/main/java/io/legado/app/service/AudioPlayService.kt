@@ -26,6 +26,7 @@ import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
 import io.legado.app.receiver.MediaButtonReceiver
 import io.legado.app.service.help.AudioPlay
+import io.legado.app.ui.audio.AudioPlayActivity
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers.IO
@@ -57,6 +58,7 @@ class AudioPlayService : BaseService(),
     private var position = 0
     private val dsRunnable: Runnable = Runnable { doDs() }
     private var mpRunnable: Runnable = Runnable { upPlayProgress() }
+    private var bookChapter: BookChapter? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -86,7 +88,7 @@ class AudioPlayService : BaseService(),
                 Action.resume -> resume()
                 Action.prev -> moveToPrev()
                 Action.next -> moveToNext()
-                Action.moveTo -> loadContent(intent.getIntExtra("index", AudioPlay.durChapterIndex))
+                Action.moveTo -> moveTo(intent.getIntExtra("index", AudioPlay.durChapterIndex))
                 Action.addTimer -> addTimer()
                 Action.setTimer -> setTimer(intent.getIntExtra("minute", 0))
                 Action.adjustProgress -> adjustProgress(intent.getIntExtra("position", position))
@@ -110,7 +112,6 @@ class AudioPlayService : BaseService(),
     }
 
     private fun play() {
-        postEvent(Bus.AUDIO_SUB_TITLE, subtitle)
         upNotification()
         if (requestFocus()) {
             try {
@@ -165,11 +166,16 @@ class AudioPlayService : BaseService(),
      */
     override fun onPrepared(mp: MediaPlayer?) {
         if (pause) return
-        mp?.start()
-        mp?.seekTo(position)
-        postEvent(Bus.AUDIO_SIZE, mp?.duration)
-        handler.removeCallbacks(mpRunnable)
-        handler.post(mpRunnable)
+        mp?.let {
+            mp.start()
+            mp.seekTo(position)
+            postEvent(Bus.AUDIO_SIZE, mp.duration)
+            bookChapter?.let {
+                it.end = mp.duration.toLong()
+            }
+            handler.removeCallbacks(mpRunnable)
+            handler.post(mpRunnable)
+        }
     }
 
     /**
@@ -215,7 +221,11 @@ class AudioPlayService : BaseService(),
         upNotification()
     }
 
+    /**
+     * 更新播放进度
+     */
     private fun upPlayProgress() {
+        saveProgress()
         postEvent(Bus.AUDIO_PROGRESS, mediaPlayer.currentPosition)
         handler.postDelayed(mpRunnable, 1000)
     }
@@ -226,6 +236,13 @@ class AudioPlayService : BaseService(),
             if (addLoading(index)) {
                 launch(IO) {
                     App.db.bookChapterDao().getChapter(book.bookUrl, index)?.let { chapter ->
+                        if (index == AudioPlay.durChapterIndex) {
+                            bookChapter = chapter
+                            subtitle = chapter.title
+                            postEvent(Bus.AUDIO_SUB_TITLE, subtitle)
+                            postEvent(Bus.AUDIO_SIZE, chapter.end?.toInt() ?: 0)
+                            postEvent(Bus.AUDIO_PROGRESS, position)
+                        }
                         BookHelp.getContent(book, chapter)?.let {
                             contentLoadFinish(chapter, it)
                             removeLoading(chapter.index)
@@ -270,18 +287,30 @@ class AudioPlayService : BaseService(),
     }
 
     /**
-     *
+     * 加载完成
      */
     private fun contentLoadFinish(chapter: BookChapter, content: String) {
         if (chapter.index == AudioPlay.durChapterIndex) {
             subtitle = chapter.title
             url = content
             play()
+            loadContent(AudioPlay.durChapterIndex + 1)
         }
     }
 
-    fun moveToPrev() {
+    private fun moveTo(index: Int) {
+        mediaPlayer.pause()
+        AudioPlay.durChapterIndex = index
+        AudioPlay.durPageIndex = 0
+        AudioPlay.book?.durChapterIndex = AudioPlay.durChapterIndex
+        saveRead()
+        position = 0
+        loadContent(AudioPlay.durChapterIndex)
+    }
+
+    private fun moveToPrev() {
         if (AudioPlay.durChapterIndex > 0) {
+            mediaPlayer.pause()
             AudioPlay.durChapterIndex--
             AudioPlay.durPageIndex = 0
             AudioPlay.book?.durChapterIndex = AudioPlay.durChapterIndex
@@ -291,8 +320,9 @@ class AudioPlayService : BaseService(),
         }
     }
 
-    fun moveToNext() {
+    private fun moveToNext() {
         if (AudioPlay.durChapterIndex < AudioPlay.chapterSize - 1) {
+            mediaPlayer.pause()
             AudioPlay.durChapterIndex++
             AudioPlay.durPageIndex = 0
             AudioPlay.book?.durChapterIndex = AudioPlay.durChapterIndex
@@ -316,7 +346,7 @@ class AudioPlayService : BaseService(),
         }
     }
 
-    fun saveProgress() {
+    private fun saveProgress() {
         launch(IO) {
             AudioPlay.book?.let {
                 App.db.bookDao().upProgress(it.bookUrl, AudioPlay.durPageIndex)
@@ -439,7 +469,7 @@ class AudioPlayService : BaseService(),
             .setContentTitle(nTitle)
             .setContentText(nSubtitle)
             .setContentIntent(
-                IntentHelp.activityPendingIntent<AudioPlayService>(this, "activity")
+                IntentHelp.activityPendingIntent<AudioPlayActivity>(this, "activity")
             )
         if (pause) {
             builder.addAction(
