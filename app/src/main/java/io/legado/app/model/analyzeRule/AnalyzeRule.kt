@@ -6,6 +6,7 @@ import androidx.annotation.Keep
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.Pattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
+import io.legado.app.data.entities.BookChapter
 import io.legado.app.utils.*
 import org.mozilla.javascript.NativeObject
 import java.util.*
@@ -20,7 +21,8 @@ import kotlin.collections.HashMap
  */
 @Keep
 @Suppress("unused")
-class AnalyzeRule(private var book: BaseBook? = null) {
+class AnalyzeRule(var book: BaseBook? = null) {
+    var chapter: BookChapter? = null
     private var content: Any? = null
     private var baseUrl: String? = null
     private var isJSON: Boolean = false
@@ -33,10 +35,6 @@ class AnalyzeRule(private var book: BaseBook? = null) {
     private var objectChangedXP = false
     private var objectChangedJS = false
     private var objectChangedJP = false
-
-    fun setBook(book: BaseBook) {
-        this.book = book
-    }
 
     @Throws(Exception::class)
     @JvmOverloads
@@ -172,12 +170,7 @@ class AnalyzeRule(private var book: BaseBook? = null) {
      * 获取文本
      */
     @Throws(Exception::class)
-    fun getString(rule: String): String? {
-        return getString(rule, false)
-    }
-
-    @Throws(Exception::class)
-    fun getString(ruleStr: String, isUrl: Boolean): String? {
+    fun getString(ruleStr: String, isUrl: Boolean = false): String? {
         if (TextUtils.isEmpty(ruleStr)) return null
         val ruleList = splitSourceRule(ruleStr)
         return getString(ruleList, isUrl)
@@ -299,7 +292,7 @@ class AnalyzeRule(private var book: BaseBook? = null) {
     private fun putRule(map: Map<String, String>) {
         for ((key, value) in map) {
             getString(value)?.let {
-                book?.putVariable(key, it)
+                put(key, it)
             }
         }
     }
@@ -575,12 +568,15 @@ class AnalyzeRule(private var book: BaseBook? = null) {
     }
 
     fun put(key: String, value: String): String {
-        book?.putVariable(key, value)
+        chapter?.putVariable(key, value)
+            ?: book?.putVariable(key, value)
         return value
     }
 
-    operator fun get(key: String): String {
-        return book?.variableMap?.get(key) ?: ""
+    fun get(key: String): String {
+        return chapter?.variableMap?.get(key)
+            ?: book?.variableMap?.get(key)
+            ?: ""
     }
 
     /**

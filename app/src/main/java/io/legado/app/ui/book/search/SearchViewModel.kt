@@ -20,8 +20,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
     private var task: Coroutine<*>? = null
     var callBack: CallBack? = null
     var searchKey: String = ""
-    var startTime: Long = 0
-    var searchPage = 0
+    var searchPage = 1
     var isLoading = false
     private var searchBooks = arrayListOf<SearchBook>()
 
@@ -34,11 +33,10 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
             searchPage++
         } else if (key.isNotEmpty()) {
             isLoading = true
-            searchPage = 0
+            searchPage = 1
             searchKey = key
             searchBooks.clear()
         }
-        startTime = System.currentTimeMillis()
         callBack?.startSearch()
         task = execute {
             val searchGroup = context.getPrefString("searchGroup") ?: ""
