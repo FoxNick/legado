@@ -12,6 +12,7 @@ import io.legado.app.help.storage.OldRule
 import io.legado.app.help.storage.Restore.jsonPath
 import io.legado.app.utils.*
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class BookSourceViewModel(application: Application) : BaseViewModel(application) {
@@ -121,60 +122,80 @@ class BookSourceViewModel(application: Application) : BaseViewModel(application)
         }
     }
 
-    fun importSourceFromFilePath(path: String) {
+    fun importSourceFromFilePath(path: String, finally: (msg: String) -> Unit) {
         execute {
             val file = File(path)
             if (file.exists()) {
-                importSource(file.readText())
+                importSource(file.readText(), finally)
+            } else {
+                withContext(Dispatchers.Main) {
+                    finally("文件无法打开")
+                }
             }
         }
     }
 
-    fun importSource(text: String) {
-        execute(context = Dispatchers.Main) {
+    fun importSource(text: String, finally: (msg: String) -> Unit) {
+        execute {
             val text1 = text.trim()
-            if (text1.isJsonObject()) {
-                val json = JsonPath.parse(text1)
-                val urls = json.read<List<String>>("$.sourceUrls")
-                if (!urls.isNullOrEmpty()) {
-                    urls.forEach { importSourceUrl(it) }
-                } else {
-                    OldRule.jsonToBookSource(text1)?.let {
-                        App.db.bookSourceDao().insert(it)
+            when {
+                text1.isJsonObject() -> {
+                    val json = JsonPath.parse(text1)
+                    val urls = json.read<List<String>>("$.sourceUrls")
+                    var count = 0
+                    if (!urls.isNullOrEmpty()) {
+                        urls.forEach {
+                            count += importSourceUrl(it)
+                        }
+                    } else {
+                        OldRule.jsonToBookSource(text1)?.let {
+                            App.db.bookSourceDao().insert(it)
+                            count = 1
+                        }
                     }
-                    toast("成功导入1条")
+                    "导入${count}条"
                 }
-            } else if (text1.isJsonArray()) {
+                text1.isJsonArray() -> {
+                    val bookSources = mutableListOf<BookSource>()
+                    val items: List<Map<String, Any>> = jsonPath.parse(text1).read("$")
+                    for (item in items) {
+                        val jsonItem = jsonPath.parse(item)
+                        OldRule.jsonToBookSource(jsonItem.jsonString())?.let {
+                            bookSources.add(it)
+                        }
+                    }
+                    App.db.bookSourceDao().insert(*bookSources.toTypedArray())
+                    "导入${bookSources.size}条"
+                }
+                text1.isAbsUrl() -> {
+                    val count = importSourceUrl(text1)
+                    "导入${count}条"
+                }
+                else -> "格式不对"
+            }
+        }.onError {
+            finally(it.localizedMessage)
+        }.onSuccess {
+            finally(it ?: "导入完成")
+        }
+    }
+
+    private fun importSourceUrl(url: String): Int {
+        NetworkUtils.getBaseUrl(url)?.let {
+            val response = HttpHelper.getApiService<IHttpGetApi>(it).get(url, mapOf()).execute()
+            response.body()?.let { body ->
                 val bookSources = mutableListOf<BookSource>()
-                val items: List<Map<String, Any>> = jsonPath.parse(text1).read("$")
+                val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
                 for (item in items) {
                     val jsonItem = jsonPath.parse(item)
-                    OldRule.jsonToBookSource(jsonItem.jsonString())?.let {
-                        bookSources.add(it)
+                    OldRule.jsonToBookSource(jsonItem.jsonString())?.let { source ->
+                        bookSources.add(source)
                     }
                 }
                 App.db.bookSourceDao().insert(*bookSources.toTypedArray())
-                toast("成功导入${bookSources.size}条")
-            } else if (text1.isAbsUrl()) {
-                importSourceUrl(text1)
-            } else {
-                toast("格式不对")
+                return bookSources.size
             }
-        }.onError {
-            toast(it.localizedMessage)
         }
-    }
-
-    private fun importSourceUrl(url: String) {
-        execute {
-            NetworkUtils.getBaseUrl(url)?.let {
-                val response = HttpHelper.getApiService<IHttpGetApi>(it).get(url, mapOf()).execute()
-                response.body()?.let { body ->
-                    importSource(body)
-                }
-            }
-        }.onError {
-            toast(it.localizedMessage)
-        }
+        return 0
     }
 }
