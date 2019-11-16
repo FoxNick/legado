@@ -170,8 +170,8 @@ class AnalyzeRule(var book: BaseBook? = null) {
      * 获取文本
      */
     @Throws(Exception::class)
-    fun getString(ruleStr: String, isUrl: Boolean = false): String? {
-        if (TextUtils.isEmpty(ruleStr)) return null
+    fun getString(ruleStr: String?, isUrl: Boolean = false): String {
+        if (TextUtils.isEmpty(ruleStr)) return ""
         val ruleList = splitSourceRule(ruleStr)
         return getString(ruleList, isUrl)
     }
@@ -190,7 +190,7 @@ class AnalyzeRule(var book: BaseBook? = null) {
                     putRule(sourceRule.putMap)
                     sourceRule.makeUpRule(result)
                     result?.let {
-                        if (sourceRule.rule.isNotBlank()) {
+                        if (sourceRule.rule.isNotBlank() || sourceRule.replaceRegex.isEmpty()) {
                             result = when (sourceRule.mode) {
                                 Mode.Js -> evalJS(sourceRule.rule, it)
                                 Mode.Json -> getAnalyzeByJSonPath(it).getString(sourceRule.rule)
@@ -337,10 +337,10 @@ class AnalyzeRule(var book: BaseBook? = null) {
      * 分解规则生成规则列表
      */
     @Throws(Exception::class)
-    fun splitSourceRule(ruleStr: String, mode: Mode = Mode.Default): List<SourceRule> {
+    fun splitSourceRule(ruleStr: String?, mode: Mode = Mode.Default): List<SourceRule> {
         var vRuleStr = ruleStr
         val ruleList = ArrayList<SourceRule>()
-        if (TextUtils.isEmpty(vRuleStr)) return ruleList
+        if (vRuleStr.isNullOrEmpty()) return ruleList
         //检测Mode
         var mMode: Mode = mode
         when {

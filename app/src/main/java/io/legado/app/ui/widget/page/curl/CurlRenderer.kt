@@ -67,6 +67,10 @@ class CurlRenderer(private val mObserver: Observer) : GLSurfaceView.Renderer {
         gl.glClear(GL10.GL_COLOR_BUFFER_BIT)
         gl.glLoadIdentity()
 
+        if (!mObserver.canDraw) {
+            return
+        }
+
         for (i in mCurlMeshes.indices) {
             mCurlMeshes[i].onDrawFrame(gl)
         }
@@ -82,7 +86,7 @@ class CurlRenderer(private val mObserver: Observer) : GLSurfaceView.Renderer {
         mViewRect.bottom = -1.0f
         mViewRect.left = -ratio
         mViewRect.right = ratio
-        updatePageRects()
+        updatePageRect()
 
         gl.glMatrixMode(GL10.GL_PROJECTION)
         gl.glLoadIdentity()
@@ -121,13 +125,13 @@ class CurlRenderer(private val mObserver: Observer) : GLSurfaceView.Renderer {
      * SHOW_TWO_PAGES.
      */
     @Synchronized
-    fun setViewMode(viewmode: Int) {
-        if (viewmode == SHOW_ONE_PAGE) {
-            mViewMode = viewmode
-            updatePageRects()
-        } else if (viewmode == SHOW_TWO_PAGES) {
-            mViewMode = viewmode
-            updatePageRects()
+    fun setViewMode(viewMode: Int) {
+        if (viewMode == SHOW_ONE_PAGE) {
+            mViewMode = viewMode
+            updatePageRect()
+        } else if (viewMode == SHOW_TWO_PAGES) {
+            mViewMode = viewMode
+            updatePageRect()
         }
     }
 
@@ -142,7 +146,7 @@ class CurlRenderer(private val mObserver: Observer) : GLSurfaceView.Renderer {
     /**
      * Recalculates page rectangles.
      */
-    private fun updatePageRects() {
+    private fun updatePageRect() {
         if (mViewRect.width() == 0f || mViewRect.height() == 0f) {
             return
         } else if (mViewMode == SHOW_ONE_PAGE) {
@@ -200,6 +204,8 @@ class CurlRenderer(private val mObserver: Observer) : GLSurfaceView.Renderer {
          * what needs to be done when this happens.
          */
         fun onSurfaceCreated()
+
+        var canDraw: Boolean
     }
 
     companion object {
