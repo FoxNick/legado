@@ -13,13 +13,13 @@ import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.AjaxWebView
 import io.legado.app.help.http.HttpHelper
 import io.legado.app.help.http.RequestMethod
+import io.legado.app.help.http.Res
 import io.legado.app.utils.*
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
-import retrofit2.Response
 import java.net.URLEncoder
 import java.util.*
 import java.util.regex.Pattern
@@ -38,7 +38,8 @@ class AnalyzeUrl(
     page: Int? = null,
     headerMapF: Map<String, String>? = null,
     baseUrl: String? = null,
-    book: BaseBook? = null
+    book: BaseBook? = null,
+    var useWebView: Boolean = false
 ) {
     companion object {
         private val pagePattern = Pattern.compile("<(.*?)>")
@@ -50,15 +51,13 @@ class AnalyzeUrl(
         private set
     var path: String? = null
         private set
+    val headerMap = HashMap<String, String>()
     private var queryStr: String? = null
     private val fieldMap = LinkedHashMap<String, String>()
-    private val headerMap = HashMap<String, String>()
     private var charset: String? = null
     private var bodyTxt: String? = null
     private var body: RequestBody? = null
     private var method = RequestMethod.GET
-    var useWebView: Boolean = false
-        private set
 
     init {
         baseUrl?.let {
@@ -267,8 +266,21 @@ class AnalyzeUrl(
     }
 
     @Throws(Exception::class)
-    suspend fun getResponseAwait(): Response<String> {
-        return when {
+    suspend fun getResponseAwait(
+        tag: String? = null,
+        jsStr: String? = null,
+        sourceRegex: String? = null
+    ): Res {
+        if (useWebView) {
+            val params = AjaxWebView.AjaxParams(url)
+            params.headerMap = headerMap
+            params.requestMethod = method
+            params.javaScript = jsStr
+            params.sourceRegex = sourceRegex
+            params.postData = bodyTxt?.toByteArray()
+            return HttpHelper.ajax(params)
+        }
+        val res = when {
             method == RequestMethod.POST -> {
                 if (fieldMap.isNotEmpty()) {
                     HttpHelper
@@ -291,20 +303,7 @@ class AnalyzeUrl(
                 .getMapAsync(url, fieldMap, headerMap)
                 .await()
         }
-    }
-
-    suspend fun getResultByWebView(
-        tag: String,
-        jsStr: String? = null,
-        sourceRegex: String? = null
-    ): AjaxWebView.Response {
-        val params = AjaxWebView.AjaxParams(url, tag)
-        params.headerMap = headerMap
-        params.requestMethod = method
-        params.javaScript = jsStr
-        params.sourceRegex = sourceRegex
-        params.postData = bodyTxt?.toByteArray()
-        return HttpHelper.ajax(params)
+        return Res(NetworkUtils.getUrl(res), res.body())
     }
 
 }

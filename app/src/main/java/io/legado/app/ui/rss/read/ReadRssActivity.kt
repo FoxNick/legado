@@ -48,22 +48,20 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
 
     private fun initWebView() {
         webView.webViewClient = WebViewClient()
-        webView.settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-        webView.settings.domStorageEnabled = true
+        webView.settings.apply {
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            domStorageEnabled = true
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initLiveData() {
         viewModel.rssArticleLiveData.observe(this, Observer { upStarMenu() })
-        viewModel.rssSourceLiveData.observe(this, Observer {
-            if (it.enableJs) {
-                webView.settings.javaScriptEnabled = true
-            }
-        })
         viewModel.contentLiveData.observe(this, Observer { content ->
             viewModel.rssArticleLiveData.value?.let {
-                val url = NetworkUtils.getAbsoluteURL(it.origin, it.link ?: "")
-                if (viewModel.rssSourceLiveData.value?.loadWithBaseUrl == true) {
+                upJavaScriptEnable()
+                val url = NetworkUtils.getAbsoluteURL(it.origin, it.link)
+                if (viewModel.rssSource?.loadWithBaseUrl == true) {
                     webView.loadDataWithBaseURL(
                         url,
                         "<style>img{max-width:100%}</style>$content",
@@ -81,8 +79,16 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
             }
         })
         viewModel.urlLiveData.observe(this, Observer {
-            webView.loadUrl(it)
+            upJavaScriptEnable()
+            webView.loadUrl(it.url, it.headerMap)
         })
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun upJavaScriptEnable() {
+        if (viewModel.rssSource?.enableJs == true) {
+            webView.settings.javaScriptEnabled = true
+        }
     }
 
     private fun upStarMenu() {

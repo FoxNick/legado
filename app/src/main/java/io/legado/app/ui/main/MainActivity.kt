@@ -9,12 +9,15 @@ import androidx.fragment.app.FragmentPagerAdapter
 import androidx.viewpager.widget.ViewPager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.legado.app.App
+import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.Bus
+import io.legado.app.data.AppDatabase
 import io.legado.app.help.ActivityHelp
 import io.legado.app.help.permission.Permissions
 import io.legado.app.help.permission.PermissionsCompat
+import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.noButton
 import io.legado.app.lib.dialogs.yesButton
@@ -45,7 +48,7 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         view_pager_main.adapter = TabFragmentPageAdapter(supportFragmentManager)
         view_pager_main.addOnPageChangeListener(this)
         bottom_navigation_view.setOnNavigationItemSelectedListener(this)
-        importYueDu()
+        restore()
         upVersion()
     }
 
@@ -59,7 +62,8 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         return false
     }
 
-    private fun importYueDu() {
+    private fun restore() {
+        if (AppDatabase.DestructiveMigration) return
         launch {
             if (withContext(IO) { App.db.bookDao().allBookCount == 0 }) {
                 alert(title = "导入") {
@@ -72,14 +76,8 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
                             .request()
                     }
                     noButton {
-                        viewModel.initRssSource()
-                    }
-                    onCancelled {
-                        viewModel.initRssSource()
                     }
                 }.show().applyTint()
-            } else {
-                viewModel.initRssSource()
             }
         }
     }
@@ -115,6 +113,9 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         if (ActivityHelp.size() > 1) {
             moveTaskToBack(true)
         } else {
+            if (!BuildConfig.DEBUG) {
+                Backup.autoBackup()
+            }
             super.finish()
         }
     }

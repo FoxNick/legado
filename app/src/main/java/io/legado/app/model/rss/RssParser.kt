@@ -2,6 +2,7 @@ package io.legado.app.model.rss
 
 import io.legado.app.constant.RSSKeywords
 import io.legado.app.data.entities.RssArticle
+import io.legado.app.model.Debug
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
@@ -39,8 +40,6 @@ object RssParser {
                         if (insideItem) currentArticle.title = xmlPullParser.nextText().trim()
                     xmlPullParser.name.equals(RSSKeywords.RSS_ITEM_LINK, true) ->
                         if (insideItem) currentArticle.link = xmlPullParser.nextText().trim()
-                    xmlPullParser.name.equals(RSSKeywords.RSS_ITEM_CATEGORY, true) ->
-                        if (insideItem) currentArticle.categoryList.add(xmlPullParser.nextText().trim())
                     xmlPullParser.name.equals(RSSKeywords.RSS_ITEM_THUMBNAIL, true) ->
                         if (insideItem) currentArticle.image =
                             xmlPullParser.getAttributeValue(null, RSSKeywords.RSS_ITEM_URL)
@@ -88,7 +87,6 @@ object RssParser {
             ) {
                 // The item is correctly parsed
                 insideItem = false
-                currentArticle.categories = currentArticle.categoryList.joinToString(",")
                 currentArticle.origin = sourceUrl
                 articleList.add(currentArticle)
                 currentArticle = RssArticle()
@@ -98,6 +96,18 @@ object RssParser {
         articleList.reverse()
         for ((index: Int, item: RssArticle) in articleList.withIndex()) {
             item.order = System.currentTimeMillis() + index
+            if (index == 0) {
+                Debug.log(sourceUrl, "┌获取标题")
+                Debug.log(sourceUrl, "└${item.title}")
+                Debug.log(sourceUrl, "┌获取时间")
+                Debug.log(sourceUrl, "└${item.pubDate}")
+                Debug.log(sourceUrl, "┌获取描述")
+                Debug.log(sourceUrl, "└${item.description}")
+                Debug.log(sourceUrl, "┌获取图片url")
+                Debug.log(sourceUrl, "└${item.image}")
+                Debug.log(sourceUrl, "┌获取文章链接")
+                Debug.log(sourceUrl, "└${item.link}")
+            }
         }
         return articleList
     }
