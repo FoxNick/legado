@@ -4,46 +4,46 @@
 
     <androidx.preference.Preference
         android:key="bookSourceManage"
-        android:title="书源管理"
+        android:title="@string/book_source_manage"
         app:iconSpaceReserved="false" />
 
     <androidx.preference.Preference
         android:key="replaceManage"
-        android:title="替换净化"
+        android:title="@string/replace_purify"
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.theme.prefs.ATESwitchPreference
         android:defaultValue="false"
         android:key="isNightTheme"
-        android:title="暗色主题"
+        android:title="@string/dark_theme"
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.theme.prefs.ATESwitchPreference
         android:defaultValue="false"
         android:key="webService"
-        android:title="Web服务"
+        android:title="@string/web_service"
         app:iconSpaceReserved="false" />
 
     <io.legado.app.lib.theme.prefs.ATEPreferenceCategory
-        android:title="设置"
+        android:title="@string/setting"
         app:iconSpaceReserved="false">
 
         <androidx.preference.Preference
             android:key="web_dav_setting"
-            android:summary="通过WebDav云备份"
-            android:title="云备份设置"
+            android:summary="@string/web_dav_set_import_old"
+            android:title="@string/backup_restore"
             app:iconSpaceReserved="false" />
 
         <androidx.preference.Preference
             android:key="theme_setting"
-            android:summary="与界面/颜色相关的一些设置"
-            android:title="主题设置"
+            android:summary="@string/theme_setting_s"
+            android:title="@string/theme_setting"
             app:iconSpaceReserved="false" />
 
         <androidx.preference.Preference
             android:key="setting"
-            android:summary="与功能相关的一些设置"
-            android:title="其它设置"
+            android:summary="@string/other_setting_s"
+            android:title="@string/other_setting"
             app:iconSpaceReserved="false" />
 
     </io.legado.app.lib.theme.prefs.ATEPreferenceCategory>

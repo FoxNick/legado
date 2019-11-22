@@ -15,7 +15,8 @@ import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.getViewModel
 import kotlinx.android.synthetic.main.activity_rss_read.*
 
-class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_read) {
+class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_read),
+    ReadRssViewModel.CallBack {
 
     override val viewModel: ReadRssViewModel
         get() = getViewModel(ReadRssViewModel::class.java)
@@ -23,6 +24,7 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
     private var starMenuItem: MenuItem? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
+        viewModel.callBack = this
         title = intent.getStringExtra("title")
         initWebView()
         initLiveData()
@@ -38,10 +40,7 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
 
     override fun onCompatOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
-            R.id.menu_rss_star -> viewModel.rssArticleLiveData.value?.let {
-                it.star = !it.star
-                viewModel.upRssArticle(it) { upStarMenu() }
-            }
+            R.id.menu_rss_star -> viewModel.star()
         }
         return super.onCompatOptionsItemSelected(item)
     }
@@ -56,9 +55,8 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun initLiveData() {
-        viewModel.rssArticleLiveData.observe(this, Observer { upStarMenu() })
         viewModel.contentLiveData.observe(this, Observer { content ->
-            viewModel.rssArticleLiveData.value?.let {
+            viewModel.rssArticle?.let {
                 upJavaScriptEnable()
                 val url = NetworkUtils.getAbsoluteURL(it.origin, it.link)
                 if (viewModel.rssSource?.loadWithBaseUrl == true) {
@@ -91,8 +89,8 @@ class ReadRssActivity : VMBaseActivity<ReadRssViewModel>(R.layout.activity_rss_r
         }
     }
 
-    private fun upStarMenu() {
-        if (viewModel.rssArticleLiveData.value?.star == true) {
+    override fun upStarMenu() {
+        if (viewModel.star) {
             starMenuItem?.setIcon(R.drawable.ic_star)
             starMenuItem?.setTitle(R.string.y_store_up)
         } else {

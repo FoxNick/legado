@@ -6,8 +6,6 @@ import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import androidx.lifecycle.Observer
-import androidx.recyclerview.widget.DividerItemDecoration
-import androidx.recyclerview.widget.LinearLayoutManager
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
@@ -15,13 +13,12 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.ImageLoader
 import io.legado.app.help.IntentDataHelp
-import io.legado.app.lib.theme.ATH
 import io.legado.app.ui.audio.AudioPlayActivity
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.changesource.ChangeSourceDialog
-import io.legado.app.utils.getCompatDrawable
+import io.legado.app.ui.chapterlist.ChapterListActivity
 import io.legado.app.utils.getViewModel
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
@@ -38,14 +35,18 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
     override val viewModel: BookInfoViewModel
         get() = getViewModel(BookInfoViewModel::class.java)
 
-    private lateinit var adapter: ChapterListAdapter
-
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         setSupportActionBar(toolbar)
-        initRecyclerView()
         viewModel.bookData.observe(this, Observer { showBook(it) })
         viewModel.isLoadingData.observe(this, Observer { upLoading(it) })
         viewModel.chapterListData.observe(this, Observer { showChapter(it) })
+        viewModel.groupData.observe(this, Observer {
+            if (it == null) {
+                tv_group.text = getString(R.string.group_s, getString(R.string.no_group))
+            } else {
+                tv_group.text = getString(R.string.group_s, it.groupName)
+            }
+        })
         viewModel.initData(intent)
         initOnClick()
     }
@@ -63,7 +64,7 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
                         startActivity<BookInfoEditActivity>(Pair("bookUrl", it.bookUrl))
                     }
                 } else {
-                    toast("未加入书架,不能编辑")
+                    toast(R.string.after_add_bookshelf)
                 }
             }
             R.id.menu_refresh -> {
@@ -81,6 +82,7 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
         tv_author.text = getString(R.string.author_show, book.author)
         tv_origin.text = getString(R.string.origin_show, book.originName)
         tv_lasted.text = getString(R.string.lasted_show, book.latestChapterTitle)
+        tv_toc.text = getString(R.string.toc_s, book.latestChapterTitle)
         tv_intro.text =
             book.getDisplayIntro() // getString(R.string.intro_show, book.getDisplayIntro())
         book.getDisplayCover()?.let {
@@ -124,14 +126,11 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
     private fun showChapter(chapterList: List<BookChapter>) {
         viewModel.bookData.value?.let {
             if (it.durChapterIndex < chapterList.size) {
-                tv_current_chapter_info.text = chapterList[it.durChapterIndex].title
+                tv_toc.text = chapterList[it.durChapterIndex].title
             } else {
-                tv_current_chapter_info.text = chapterList.last().title
+                tv_toc.text = chapterList.last().title
             }
         }
-        adapter.clearItems()
-        adapter.addItems(chapterList)
-        rv_chapter_list.scrollToPosition(viewModel.durChapterIndex)
         upLoading(false)
     }
 
@@ -146,20 +145,6 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
             }
             tv_loading.gone()
         }
-    }
-
-    private fun initRecyclerView() {
-        adapter = ChapterListAdapter(this, this)
-        ATH.applyEdgeEffectColor(rv_chapter_list)
-        rv_chapter_list.layoutManager = LinearLayoutManager(this)
-        getCompatDrawable(R.drawable.recyclerview_item_divider)?.let { drawable ->
-            rv_chapter_list.addItemDecoration(
-                DividerItemDecoration(this, DividerItemDecoration.VERTICAL).apply {
-                    setDrawable(drawable)
-                }
-            )
-        }
-        rv_chapter_list.adapter = adapter
     }
 
     private fun initOnClick() {
@@ -194,16 +179,19 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
                 ChangeSourceDialog.show(supportFragmentManager, it.name, it.author)
             }
         }
-        tv_current_chapter_info.onClick {
+        tv_toc.onClick {
+            if (!viewModel.inBookshelf) {
+                toast(R.string.after_add_bookshelf)
+                return@onClick
+            }
             viewModel.bookData.value?.let {
-                rv_chapter_list.scrollToPosition(it.durChapterIndex)
+                startActivity<ChapterListActivity>(
+                    Pair("bookUrl", it.bookUrl)
+                )
             }
         }
-        iv_chapter_top.onClick {
-            rv_chapter_list.scrollToPosition(0)
-        }
-        iv_chapter_bottom.onClick {
-            rv_chapter_list.scrollToPosition(adapter.itemCount - 1)
+        tv_group.onClick {
+
         }
     }
 

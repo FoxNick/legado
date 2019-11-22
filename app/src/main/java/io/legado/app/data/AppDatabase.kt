@@ -13,21 +13,21 @@ import io.legado.app.help.storage.Restore
 @Database(
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
-        RssSource::class, Bookmark::class, RssArticle::class],
-    version = 4,
+        RssSource::class, Bookmark::class, RssArticle::class, RssStar::class],
+    version = 5,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
 
     companion object {
-        var DestructiveMigration = false
+
         private const val DATABASE_NAME = "legado.db"
+
         fun createDatabase(context: Context): AppDatabase {
             return Room.databaseBuilder(context, AppDatabase::class.java, DATABASE_NAME)
                 .fallbackToDestructiveMigration()
                 .addCallback(object : Callback() {
                     override fun onDestructiveMigration(db: SupportSQLiteDatabase) {
-                        DestructiveMigration = true
                         Restore.restore()
                     }
                 })
@@ -45,5 +45,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun rssSourceDao(): RssSourceDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun rssArticleDao(): RssArticleDao
+    abstract fun rssStarDao(): RssStarDao
     abstract fun cookieDao(): CookieDao
 }
