@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.os.Build
 import android.os.Handler
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -87,6 +88,7 @@ class AudioPlayService : BaseService(),
                 Action.resume -> resume()
                 Action.prev -> moveToPrev()
                 Action.next -> moveToNext()
+                Action.adjustSpeed -> upSpeed(intent.getFloatExtra("adjust", 1f))
                 Action.moveTo -> moveTo(intent.getIntExtra("index", AudioPlay.durChapterIndex))
                 Action.addTimer -> addTimer()
                 Action.setTimer -> setTimer(intent.getIntExtra("minute", 0))
@@ -156,6 +158,19 @@ class AudioPlayService : BaseService(),
             mediaPlayer.seekTo(position)
         } else {
             this.position = position
+        }
+    }
+
+    private fun upSpeed(adjust: Float) {
+        kotlin.runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                with(mediaPlayer) {
+                    if (isPlaying) {
+                        playbackParams = playbackParams.apply { speed += adjust }
+                    }
+                    postEvent(Bus.AUDIO_SPEED, playbackParams.speed)
+                }
+            }
         }
     }
 

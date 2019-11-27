@@ -51,6 +51,15 @@ object AudioPlay {
         }
     }
 
+    fun adjustSpeed(context: Context, adjust: Float) {
+        if (AudioPlayService.isRun) {
+            val intent = Intent(context, AudioPlayService::class.java)
+            intent.action = Action.adjustSpeed
+            intent.putExtra("adjust", adjust)
+            context.startService(intent)
+        }
+    }
+
     fun adjustProgress(context: Context, position: Int) {
         if (AudioPlayService.isRun) {
             val intent = Intent(context, AudioPlayService::class.java)

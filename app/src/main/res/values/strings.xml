@@ -501,6 +501,8 @@
     <string name="qr_share">二维码分享</string>
     <string name="wifi_share">wifi分享</string>
     <string name="please_grant_storage_permission">请给于存储权限</string>
+    <string name="fast_rewind">减速</string>
+    <string name="fast_forward">加速</string>
     <string name="skip_previous">上一个</string>
     <string name="skip_next">下一个</string>
     <string name="music">音乐</string>
@@ -528,6 +530,7 @@
     <string name="text_color">文字颜色</string>
     <string name="select_image">选择图片</string>
     <string name="group_manage">分组管理</string>
+    <string name="group_select">分组选择</string>
     <string name="group_edit">编辑分组</string>
     <string name="add_group">添加分组</string>
     <string name="add_replace_rule">新建替换</string>

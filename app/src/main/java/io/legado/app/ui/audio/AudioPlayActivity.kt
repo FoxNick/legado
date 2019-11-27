@@ -3,6 +3,7 @@ package io.legado.app.ui.audio
 import android.app.Activity
 import android.content.Intent
 import android.graphics.drawable.Drawable
+import android.os.Build
 import android.os.Bundle
 import android.widget.SeekBar
 import androidx.lifecycle.Observer
@@ -19,16 +20,14 @@ import io.legado.app.lib.dialogs.noButton
 import io.legado.app.lib.dialogs.okButton
 import io.legado.app.service.help.AudioPlay
 import io.legado.app.ui.chapterlist.ChapterListActivity
-import io.legado.app.utils.applyTint
-import io.legado.app.utils.getViewModel
-import io.legado.app.utils.observeEvent
-import io.legado.app.utils.observeEventSticky
+import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_audio_play.*
 import kotlinx.android.synthetic.main.view_title_bar.*
 import org.apache.commons.lang3.time.DateFormatUtils
 import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.sdk27.listeners.onLongClick
 import org.jetbrains.anko.startActivityForResult
+
 
 class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_audio_play) {
 
@@ -81,6 +80,16 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
                     Pair("bookUrl", it.bookUrl)
                 )
             }
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            iv_fast_rewind.invisible()
+            iv_fast_forward.invisible()
+        }
+        iv_fast_forward.onClick {
+            AudioPlay.adjustSpeed(this, 0.1f)
+        }
+        iv_fast_rewind.onClick {
+            AudioPlay.adjustSpeed(this, -0.1f)
         }
     }
 
@@ -169,6 +178,10 @@ class AudioPlayActivity : VMBaseActivity<AudioPlayViewModel>(R.layout.activity_a
             AudioPlay.durPageIndex = it
             if (!adjustProgress) player_progress.progress = it
             tv_dur_time.text = DateFormatUtils.format(it.toLong(), "mm:ss")
+        }
+        observeEventSticky<Float>(Bus.AUDIO_SPEED) {
+            tv_speed.text = String.format("%.1fX", it)
+            tv_speed.visible()
         }
     }
 

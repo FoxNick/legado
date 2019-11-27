@@ -11,6 +11,7 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.ImageLoader
 import io.legado.app.help.IntentDataHelp
 import io.legado.app.ui.audio.AudioPlayActivity
@@ -30,8 +31,10 @@ import org.jetbrains.anko.toast
 
 
 class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_book_info),
+    GroupSelectDialog.CallBack,
     ChapterListAdapter.CallBack,
     ChangeSourceDialog.CallBack {
+
     override val viewModel: BookInfoViewModel
         get() = getViewModel(BookInfoViewModel::class.java)
 
@@ -83,8 +86,7 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
         tv_origin.text = getString(R.string.origin_show, book.originName)
         tv_lasted.text = getString(R.string.lasted_show, book.latestChapterTitle)
         tv_toc.text = getString(R.string.toc_s, book.latestChapterTitle)
-        tv_intro.text =
-            book.getDisplayIntro() // getString(R.string.intro_show, book.getDisplayIntro())
+        tv_intro.text = book.getDisplayIntro()
         book.getDisplayCover()?.let {
             ImageLoader.load(this, it)
                 .error(R.drawable.image_cover_default)
@@ -126,9 +128,9 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
     private fun showChapter(chapterList: List<BookChapter>) {
         viewModel.bookData.value?.let {
             if (it.durChapterIndex < chapterList.size) {
-                tv_toc.text = chapterList[it.durChapterIndex].title
+                tv_toc.text = getString(R.string.toc_s, chapterList[it.durChapterIndex].title)
             } else {
-                tv_toc.text = chapterList.last().title
+                tv_toc.text = getString(R.string.toc_s, chapterList.last().title)
             }
         }
         upLoading(false)
@@ -191,7 +193,7 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
             }
         }
         tv_group.onClick {
-
+            GroupSelectDialog.show(supportFragmentManager)
         }
     }
 
@@ -246,6 +248,14 @@ class BookInfoActivity : VMBaseActivity<BookInfoViewModel>(R.layout.activity_boo
 
     override fun durChapterIndex(): Int {
         return viewModel.durChapterIndex
+    }
+
+    override fun upGroup(group: BookGroup) {
+        viewModel.groupData.postValue(group)
+        viewModel.bookData.value?.group = group.groupId
+        if (viewModel.inBookshelf) {
+            viewModel.saveBook()
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
