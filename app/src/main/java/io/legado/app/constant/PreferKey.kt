@@ -8,4 +8,6 @@ object PreferKey {
     const val precisionSearch = "precisionSearch"
     const val prevKey = "prevKeyCode"
     const val nextKey = "nextKeyCode"
+    const val showRss = "showRss"
+    const val bookshelfLayout = "bookshelfLayout"
 }

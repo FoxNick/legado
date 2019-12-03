@@ -4,6 +4,7 @@ import android.app.Application
 import io.legado.app.App
 import io.legado.app.base.BaseViewModel
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.service.help.Download
 
 class BookshelfViewModel(application: Application) : BaseViewModel(application) {
 
@@ -29,6 +30,14 @@ class BookshelfViewModel(application: Application) : BaseViewModel(application) 
     fun delGroup(vararg bookGroup: BookGroup) {
         execute {
             App.db.bookGroupDao().delete(*bookGroup)
+        }
+    }
+
+    fun downloadAll() {
+        execute {
+            App.db.bookDao().hasUpdateBooks.forEach { book ->
+                Download.start(context, book.bookUrl, book.durChapterIndex, book.totalChapterNum)
+            }
         }
     }
 }

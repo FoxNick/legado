@@ -16,6 +16,7 @@ import android.widget.TabWidget
 import androidx.appcompat.widget.AppCompatTextView
 import io.legado.app.R
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.utils.getCompatColor
 import io.legado.app.utils.gone
 import io.legado.app.utils.visible
 
@@ -42,10 +43,10 @@ class BadgeView @JvmOverloads constructor(
                 return null
             }
             val text = text.toString()
-            try {
-                return Integer.parseInt(text)
+            return try {
+                Integer.parseInt(text)
             } catch (e: NumberFormatException) {
-                return null
+                null
             }
 
         }
@@ -146,7 +147,7 @@ class BadgeView @JvmOverloads constructor(
     }
 
     fun setHighlight(highlight: Boolean) {
-        setBackground(resources.getColor(if (highlight) R.color.highlight else R.color.darker_gray))
+        setBackground(context.getCompatColor(if (highlight) R.color.highlight else R.color.darker_gray))
     }
 
     fun setBadgeMargin(dipMargin: Int) {

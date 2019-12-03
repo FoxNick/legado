@@ -5,7 +5,7 @@ import android.view.KeyEvent
 import android.view.MenuItem
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
-import androidx.fragment.app.FragmentPagerAdapter
+import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.viewpager.widget.ViewPager
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import io.legado.app.App
@@ -13,20 +13,19 @@ import io.legado.app.BuildConfig
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.constant.Bus
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.ActivityHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.ATH
+import io.legado.app.service.BaseReadAloudService
+import io.legado.app.service.help.ReadAloud
+import io.legado.app.ui.about.UpdateLog
 import io.legado.app.ui.main.bookshelf.BookshelfFragment
 import io.legado.app.ui.main.explore.ExploreFragment
 import io.legado.app.ui.main.my.MyFragment
 import io.legado.app.ui.main.rss.RssFragment
-import io.legado.app.ui.widget.page.ChapterProvider
-import io.legado.app.utils.getPrefInt
-import io.legado.app.utils.getViewModel
-import io.legado.app.utils.observeEvent
-import io.legado.app.utils.putPrefInt
+import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_main.*
-import kotlinx.android.synthetic.main.view_book_page.*
 
 class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     BottomNavigationView.OnNavigationItemSelectedListener,
@@ -36,15 +35,17 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         get() = getViewModel(MainViewModel::class.java)
 
     private var pagePosition = 0
+    private val fragmentList = arrayListOf<Fragment>()
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
-        ChapterProvider.textView = content_text_view
         ATH.applyEdgeEffectColor(view_pager_main)
         ATH.applyBottomNavigationColor(bottom_navigation_view)
         view_pager_main.offscreenPageLimit = 3
+        upFragmentList()
         view_pager_main.adapter = TabFragmentPageAdapter(supportFragmentManager)
         view_pager_main.addOnPageChangeListener(this)
         bottom_navigation_view.setOnNavigationItemSelectedListener(this)
+        bottom_navigation_view.menu.findItem(R.id.menu_rss).isVisible = showRss()
         upVersion()
     }
 
@@ -58,27 +59,54 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         return false
     }
 
+    private fun upFragmentList() {
+        if (fragmentList.isEmpty()) {
+            fragmentList.add(BookshelfFragment())
+            fragmentList.add(ExploreFragment())
+            fragmentList.add(RssFragment())
+            fragmentList.add(MyFragment())
+        }
+        if (showRss() && fragmentList.size < 4) {
+            fragmentList.add(2, RssFragment())
+        }
+        if (!showRss() && fragmentList.size == 4) {
+            fragmentList.removeAt(2)
+        }
+    }
+
     private fun upVersion() {
         if (getPrefInt("versionCode") != App.INSTANCE.versionCode) {
             putPrefInt("versionCode", App.INSTANCE.versionCode)
+            if (!BuildConfig.DEBUG) {
+                UpdateLog().show(supportFragmentManager, "updateLog")
+            }
         }
     }
 
     override fun onPageSelected(position: Int) {
         pagePosition = position
-        bottom_navigation_view.menu.getItem(position).isChecked = true
+        when (position) {
+            0, 1, 3 -> bottom_navigation_view.menu.getItem(position).isChecked = true
+            2 -> if (showRss()) {
+                bottom_navigation_view.menu.getItem(position).isChecked = true
+            } else {
+                bottom_navigation_view.menu.getItem(3).isChecked = true
+            }
+        }
     }
 
     override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
         event?.let {
             when (keyCode) {
-                KeyEvent.KEYCODE_BACK -> if (
-                    pagePosition != 0
-                    && event.isTracking
-                    && !event.isCanceled
-                ) {
-                    view_pager_main.currentItem = 0
-                    return true
+                KeyEvent.KEYCODE_BACK -> if (event.isTracking && !event.isCanceled) {
+                    if (pagePosition != 0) {
+                        view_pager_main.currentItem = 0
+                        return true
+                    }
+                    if (!BaseReadAloudService.pause) {
+                        moveTaskToBack(true)
+                        return true
+                    }
                 }
             }
         }
@@ -96,30 +124,44 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        ReadAloud.stop(this)
+    }
+
     override fun observeLiveBus() {
         observeEvent<String>(Bus.RECREATE) {
             recreate()
         }
-        observeEvent<Boolean>(Bus.UP_CONFIG) {
-            content_view.upStyle()
+        observeEvent<String>(PreferKey.showRss) {
+            bottom_navigation_view.menu.findItem(R.id.menu_rss).isVisible = showRss()
+            upFragmentList()
+            view_pager_main.adapter?.notifyDataSetChanged()
+            if (showRss()) {
+                view_pager_main.setCurrentItem(3, false)
+            }
         }
     }
 
-    private class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
-        FragmentPagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+    private fun showRss(): Boolean {
+        return getPrefBoolean("showRss", true)
+    }
+
+    private inner class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
+        FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
+
+        override fun getItemPosition(`object`: Any): Int {
+            return POSITION_NONE
+        }
 
         override fun getItem(position: Int): Fragment {
-            return when (position) {
-                0 -> BookshelfFragment()
-                1 -> ExploreFragment()
-                2 -> RssFragment()
-                else -> MyFragment()
-            }
+            return fragmentList[position]
         }
 
         override fun getCount(): Int {
-            return 4
+            return if (showRss()) 4 else 3
         }
+
     }
 }
 

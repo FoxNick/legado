@@ -24,6 +24,7 @@ import io.legado.app.help.IntentDataHelp
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
 import io.legado.app.receiver.MediaButtonReceiver
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.widget.page.TextChapter
 import io.legado.app.utils.getPrefBoolean
@@ -35,6 +36,11 @@ abstract class BaseReadAloudService : BaseService(),
     companion object {
         var isRun = false
         var timeMinute: Int = 0
+        var pause = true
+
+        fun isPlay(): Boolean {
+            return isRun && !pause
+        }
     }
 
     private val handler = Handler()
@@ -44,13 +50,12 @@ abstract class BaseReadAloudService : BaseService(),
     private var mediaSessionCompat: MediaSessionCompat? = null
     private var title: String = ""
     private var subtitle: String = ""
-    var pause = false
     val contentList = arrayListOf<String>()
     var nowSpeak: Int = 0
     var readAloudNumber: Int = 0
     var textChapter: TextChapter? = null
     var pageIndex = 0
-    private val dsRunnable: Runnable? = Runnable { doDs() }
+    private val dsRunnable: Runnable = Runnable { doDs() }
 
     override fun onCreate() {
         super.onCreate()
@@ -66,6 +71,7 @@ abstract class BaseReadAloudService : BaseService(),
     override fun onDestroy() {
         super.onDestroy()
         isRun = false
+        pause = true
         unregisterReceiver(broadcastReceiver)
         postEvent(Bus.ALOUD_STATE, Status.STOP)
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_STOPPED)
@@ -120,6 +126,7 @@ abstract class BaseReadAloudService : BaseService(),
     }
 
     open fun play() {
+        pause = false
         postEvent(Bus.ALOUD_STATE, Status.PLAY)
         upNotification()
     }
@@ -127,7 +134,7 @@ abstract class BaseReadAloudService : BaseService(),
     @CallSuper
     open fun pauseReadAloud(pause: Boolean) {
         postEvent(Bus.ALOUD_STATE, Status.PAUSE)
-        this.pause = pause
+        BaseReadAloudService.pause = pause
         upNotification()
         upMediaSessionPlaybackState(PlaybackStateCompat.STATE_PAUSED)
     }
@@ -325,4 +332,9 @@ abstract class BaseReadAloudService : BaseService(),
 
     abstract fun aloudServicePendingIntent(actionStr: String): PendingIntent?
 
+    open fun nextChapter() {
+        if (!ReadBook.moveToNextChapter(true)) {
+            stopSelf()
+        }
+    }
 }

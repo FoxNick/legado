@@ -10,9 +10,9 @@ import android.widget.SeekBar
 import androidx.fragment.app.DialogFragment
 import io.legado.app.R
 import io.legado.app.constant.Bus
-import io.legado.app.constant.Status
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.help.ReadAloud
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.Help
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.dialog_read_aloud.*
@@ -21,15 +21,6 @@ import org.jetbrains.anko.sdk27.listeners.onLongClick
 
 class ReadAloudDialog : DialogFragment() {
     var callBack: CallBack? = null
-
-    override fun onCreateView(
-        inflater: LayoutInflater,
-        container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        callBack = activity as? CallBack
-        return inflater.inflate(R.layout.dialog_read_aloud, container)
-    }
 
     override fun onStart() {
         super.onStart()
@@ -49,6 +40,15 @@ class ReadAloudDialog : DialogFragment() {
         }
     }
 
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        callBack = activity as? CallBack
+        return inflater.inflate(R.layout.dialog_read_aloud, container)
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         initData()
@@ -57,11 +57,9 @@ class ReadAloudDialog : DialogFragment() {
     }
 
     private fun initData() {
-        observeEvent<Int>(Bus.ALOUD_STATE) { upPlayState(it) }
+        observeEvent<Int>(Bus.ALOUD_STATE) { upPlayState() }
         observeEvent<Int>(Bus.TTS_DS) { seek_timer.progress = it }
-        callBack?.readAloudStatus?.let {
-            upPlayState(it)
-        }
+        upPlayState()
         seek_timer.progress = BaseReadAloudService.timeMinute
         tv_timer.text =
             requireContext().getString(R.string.timer_m, BaseReadAloudService.timeMinute)
@@ -88,7 +86,6 @@ class ReadAloudDialog : DialogFragment() {
                 requireContext().putPrefInt("ttsSpeechRate", seek_tts_SpeechRate.progress)
                 upTtsSpeechRate()
             }
-
         })
         seek_timer.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -108,17 +105,21 @@ class ReadAloudDialog : DialogFragment() {
         iv_other_config.onClick {
             ReadAloudConfigDialog().show(childFragmentManager, "readAloudConfigDialog")
         }
-        iv_menu.onLongClick { callBack?.openChapterList(); true }
         iv_stop.onClick { ReadAloud.stop(requireContext()); dismiss() }
         iv_play_pause.onClick { callBack?.onClickReadAloud() }
         iv_play_prev.onClick { ReadAloud.prevParagraph(requireContext()) }
-        iv_play_prev.onLongClick { postEvent(Bus.TTS_TURN_PAGE, -2); true }
+        iv_play_prev.onLongClick {
+            ReadBook.moveToPrevChapter(upContent = true, toLast = false)
+            true
+        }
         iv_play_next.onClick { ReadAloud.nextParagraph(requireContext()) }
-        iv_play_next.onLongClick { postEvent(Bus.TTS_TURN_PAGE, 2); true }
+        iv_play_next.onLongClick { ReadBook.moveToNextChapter(true); true }
+        fabToc.onClick { callBack?.openChapterList() }
+        fabBack.onClick { callBack?.finish() }
     }
 
-    private fun upPlayState(state: Int) {
-        if (state == Status.PLAY) {
+    private fun upPlayState() {
+        if (!BaseReadAloudService.pause) {
             iv_play_pause.setImageResource(R.drawable.ic_pause_24dp)
         } else {
             iv_play_pause.setImageResource(R.drawable.ic_play_24dp)
@@ -127,7 +128,7 @@ class ReadAloudDialog : DialogFragment() {
 
     private fun upTtsSpeechRate() {
         ReadAloud.upTtsSpeechRate(requireContext())
-        if (callBack?.readAloudStatus == Status.PLAY) {
+        if (!BaseReadAloudService.pause) {
             ReadAloud.pause(requireContext())
             ReadAloud.resume(requireContext())
         }
@@ -137,6 +138,6 @@ class ReadAloudDialog : DialogFragment() {
         fun showMenu()
         fun openChapterList()
         fun onClickReadAloud()
-        var readAloudStatus: Int
+        fun finish()
     }
 }

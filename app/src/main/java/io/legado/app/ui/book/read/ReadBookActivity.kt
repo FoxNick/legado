@@ -17,7 +17,6 @@ import io.legado.app.constant.Bus
 import io.legado.app.constant.Status
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.help.IntentDataHelp
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.noButton
@@ -25,21 +24,21 @@ import io.legado.app.lib.dialogs.okButton
 import io.legado.app.receiver.TimeElectricityReceiver
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.service.help.ReadAloud
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.config.*
 import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.BG_COLOR
 import io.legado.app.ui.book.read.config.BgTextConfigDialog.Companion.TEXT_COLOR
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.changesource.ChangeSourceDialog
 import io.legado.app.ui.chapterlist.ChapterListActivity
-import io.legado.app.ui.main.MainActivity
 import io.legado.app.ui.replacerule.ReplaceRuleActivity
 import io.legado.app.ui.replacerule.edit.ReplaceEditDialog
 import io.legado.app.ui.widget.page.ChapterProvider
 import io.legado.app.ui.widget.page.PageView
-import io.legado.app.ui.widget.page.TextChapter
 import io.legado.app.ui.widget.page.delegate.PageDelegate
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_book_read.*
+import kotlinx.android.synthetic.main.view_book_page.*
 import kotlinx.android.synthetic.main.view_read_menu.*
 import kotlinx.android.synthetic.main.view_title_bar.*
 import kotlinx.coroutines.Dispatchers.IO
@@ -56,7 +55,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     ReadMenu.CallBack,
     ReadAloudDialog.CallBack,
     ChangeSourceDialog.CallBack,
-    ReadBookViewModel.CallBack,
+    ReadBook.CallBack,
     ColorPickerDialogListener {
     override val viewModel: ReadBookViewModel
         get() = getViewModel(ReadBookViewModel::class.java)
@@ -64,14 +63,13 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     private val requestCodeChapterList = 568
     private val requestCodeEditSource = 111
     private var timeElectricityReceiver: TimeElectricityReceiver? = null
-    override var readAloudStatus = Status.STOP
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         Help.upLayoutInDisplayCutoutMode(window)
         setSupportActionBar(toolbar)
         initView()
-        viewModel.callBack = this
-        viewModel.titleDate.observe(this, Observer { title_bar.title = it })
+        ReadBook.callBack = this
+        ReadBook.titleDate.observe(this, Observer { title_bar.title = it })
         viewModel.initData(intent)
     }
 
@@ -100,8 +98,9 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      * 初始化View
      */
     private fun initView() {
+        ChapterProvider.textView = content_text_view
         tv_chapter_name.onClick {
-            viewModel.webBook?.let {
+            ReadBook.webBook?.let {
                 startActivityForResult<BookSourceEditActivity>(
                     requestCodeEditSource,
                     Pair("data", it.bookSource.bookSourceUrl)
@@ -138,13 +137,13 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
         when (item.itemId) {
             R.id.menu_change_source -> {
                 read_menu.runMenuOut()
-                viewModel.book?.let {
+                ReadBook.book?.let {
                     ChangeSourceDialog.show(supportFragmentManager, it.name, it.author)
                 }
             }
             R.id.menu_refresh -> {
-                viewModel.book?.let {
-                    viewModel.curTextChapter = null
+                ReadBook.book?.let {
+                    ReadBook.curTextChapter = null
                     page_view.upContent()
                     viewModel.refreshContent(it)
                 }
@@ -196,9 +195,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     override fun onKeyLongPress(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
             KeyEvent.KEYCODE_BACK -> {
-                page_view.snackbar(R.string.to_backstage, R.string.ok) {
-                    startActivity<MainActivity>()
-                }
+                finish()
                 return true
             }
         }
@@ -218,7 +215,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                         && event.isTracking
                         && !event.isCanceled
                     ) {
-                        if (readAloudStatus == Status.PLAY) {
+                        if (BaseReadAloudService.isPlay()) {
                             ReadAloud.pause(this)
                             toast(R.string.read_aloud_pause)
                             return true
@@ -234,7 +231,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
         if (!read_menu.isVisible) {
             if (getPrefBoolean("volumeKeyPage", true)) {
                 if (getPrefBoolean("volumeKeyPageOnPlay")
-                    || readAloudStatus != Status.PLAY
+                    || BaseReadAloudService.pause
                 ) {
                     when (direction) {
                         PageDelegate.Direction.PREV -> page_view.moveToPrevPage()
@@ -249,160 +246,56 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     /**
-     * 加载章节内容
-     */
-    override fun loadContent() {
-        viewModel.loadContent(viewModel.durChapterIndex)
-        viewModel.loadContent(viewModel.durChapterIndex + 1)
-        viewModel.loadContent(viewModel.durChapterIndex - 1)
-    }
-
-    /**
-     * 加载章节内容, index章节序号
-     */
-    override fun loadContent(index: Int) {
-        viewModel.loadContent(index)
-    }
-
-    /**
      * 内容加载完成
      */
-    override fun contentLoadFinish(bookChapter: BookChapter, content: String) {
-        when (bookChapter.index) {
-            viewModel.durChapterIndex -> launch {
-                viewModel.curTextChapter = ChapterProvider
-                    .getTextChapter(bookChapter, content, viewModel.chapterSize)
-                page_view.upContent()
-                curChapterChanged()
-                if (intent.getBooleanExtra("readAloud", false)) {
-                    intent.removeExtra("readAloud")
-                    readAloud()
-                }
-            }
-            viewModel.durChapterIndex - 1 -> launch {
-                viewModel.prevTextChapter = ChapterProvider
-                    .getTextChapter(bookChapter, content, viewModel.chapterSize)
-                page_view.upContent(-1)
-            }
-            viewModel.durChapterIndex + 1 -> launch {
-                viewModel.nextTextChapter = ChapterProvider
-                    .getTextChapter(bookChapter, content, viewModel.chapterSize)
-                page_view.upContent(1)
-            }
+    override fun contentLoadFinish() {
+        if (intent.getBooleanExtra("readAloud", false)) {
+            intent.removeExtra("readAloud")
+            ReadBook.readAloud()
         }
     }
 
-    override fun upContent() {
-        page_view.upContent()
+    override fun upContent(position: Int) {
+        page_view.upContent(position)
     }
 
-    private fun curChapterChanged() {
-        viewModel.curTextChapter?.let {
+    override fun upView() {
+        ReadBook.curTextChapter?.let {
             tv_chapter_name.text = it.title
             tv_chapter_name.visible()
-            if (!viewModel.isLocalBook) {
+            if (!ReadBook.isLocalBook) {
                 tv_chapter_url.text = it.url
                 tv_chapter_url.visible()
             }
             seek_read_page.max = it.pageSize().minus(1)
-            tv_pre.isEnabled = viewModel.durChapterIndex != 0
-            tv_next.isEnabled = viewModel.durChapterIndex != viewModel.chapterSize - 1
-            curPageChanged()
+            tv_pre.isEnabled = ReadBook.durChapterIndex != 0
+            tv_next.isEnabled = ReadBook.durChapterIndex != ReadBook.chapterSize - 1
         }
     }
 
-    private fun curPageChanged() {
-        seek_read_page.progress = viewModel.durPageIndex
-        when (readAloudStatus) {
-            Status.PLAY -> readAloud()
-            Status.PAUSE -> {
-                readAloud(false)
-            }
-        }
+    override fun upPageProgress() {
+        seek_read_page.progress = ReadBook.durPageIndex
     }
 
     override fun showMenu() {
         read_menu.runMenuIn()
     }
 
-    override fun chapterSize(): Int {
-        return viewModel.chapterSize
-    }
-
-    override val curOrigin: String?
-        get() = viewModel.book?.origin
-
     override val oldBook: Book?
-        get() = viewModel.book
+        get() = ReadBook.book
 
     override fun changeTo(book: Book) {
         viewModel.changeTo(book)
     }
 
-    override fun durChapterIndex(): Int {
-        return viewModel.durChapterIndex
-    }
-
-    override fun durChapterPos(): Int {
-        viewModel.curTextChapter?.let {
-            if (viewModel.durPageIndex < it.pageSize()) {
-                return viewModel.durPageIndex
-            }
-            return it.pageSize() - 1
-        }
-        return viewModel.durPageIndex
-    }
-
     override fun setPageIndex(pageIndex: Int) {
-        viewModel.durPageIndex = pageIndex
-        viewModel.saveRead()
-        curPageChanged()
-    }
-
-    /**
-     * chapterOnDur: 0为当前页,1为下一页,-1为上一页
-     */
-    override fun textChapter(chapterOnDur: Int): TextChapter? {
-        return when (chapterOnDur) {
-            0 -> viewModel.curTextChapter
-            1 -> viewModel.nextTextChapter
-            -1 -> viewModel.prevTextChapter
-            else -> null
-        }
-    }
-
-    /**
-     * 下一页
-     */
-    override fun moveToNextChapter(upContent: Boolean): Boolean {
-        return if (viewModel.durChapterIndex < viewModel.chapterSize - 1) {
-            viewModel.durPageIndex = 0
-            viewModel.moveToNextChapter(upContent)
-            viewModel.saveRead()
-            curChapterChanged()
-            true
-        } else {
-            false
-        }
-    }
-
-    /**
-     * 上一页
-     */
-    override fun moveToPrevChapter(upContent: Boolean, last: Boolean): Boolean {
-        return if (viewModel.durChapterIndex > 0) {
-            viewModel.durPageIndex = if (last) viewModel.prevTextChapter?.lastIndex() ?: 0 else 0
-            viewModel.moveToPrevChapter(upContent)
-            viewModel.saveRead()
-            curChapterChanged()
-            true
-        } else {
-            false
-        }
+        ReadBook.durPageIndex = pageIndex
+        ReadBook.saveRead()
+        ReadBook.curPageChanged()
     }
 
     override fun clickCenter() {
-        if (readAloudStatus != Status.STOP) {
+        if (BaseReadAloudService.isRun) {
             showReadAloudDialog()
         } else {
             read_menu.runMenuIn()
@@ -417,19 +310,12 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
 
     }
 
-    override fun skipToPage(page: Int) {
-        viewModel.durPageIndex = page
-        page_view.upContent()
-        curPageChanged()
-        viewModel.saveRead()
-    }
-
     override fun openReplaceRule() {
         startActivity<ReplaceRuleActivity>()
     }
 
     override fun openChapterList() {
-        viewModel.book?.let {
+        ReadBook.book?.let {
             startActivityForResult<ChapterListActivity>(
                 requestCodeChapterList,
                 Pair("bookUrl", it.bookUrl)
@@ -454,32 +340,12 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      */
     override fun onClickReadAloud() {
         if (!BaseReadAloudService.isRun) {
-            readAloudStatus = Status.STOP
             SystemUtils.ignoreBatteryOptimization(this)
         }
-        when (readAloudStatus) {
-            Status.STOP -> readAloud()
-            Status.PLAY -> ReadAloud.pause(this)
-            Status.PAUSE -> ReadAloud.resume(this)
-        }
-    }
-
-    /**
-     * 朗读
-     */
-    private fun readAloud(play: Boolean = true) {
-        val book = viewModel.book
-        val textChapter = viewModel.curTextChapter
-        if (book != null && textChapter != null) {
-            val key = IntentDataHelp.putData(textChapter)
-            ReadAloud.play(
-                this,
-                book.name,
-                textChapter.title,
-                viewModel.durPageIndex,
-                key,
-                play
-            )
+        when {
+            !BaseReadAloudService.isRun -> ReadBook.readAloud()
+            BaseReadAloudService.pause -> ReadAloud.resume(this)
+            else -> ReadAloud.pause(this)
         }
     }
 
@@ -508,7 +374,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             when (requestCode) {
                 requestCodeEditSource -> viewModel.upBookSource()
                 requestCodeChapterList ->
-                    data?.getIntExtra("index", viewModel.durChapterIndex)?.let {
+                    data?.getIntExtra("index", ReadBook.durChapterIndex)?.let {
                         viewModel.openChapter(it)
                     }
             }
@@ -516,11 +382,11 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     override fun finish() {
-        viewModel.book?.let {
-            if (!viewModel.inBookshelf) {
+        ReadBook.book?.let {
+            if (!ReadBook.inBookshelf) {
                 this.alert(title = getString(R.string.add_to_shelf)) {
                     message = getString(R.string.check_add_bookshelf, it.name)
-                    okButton { viewModel.inBookshelf = true }
+                    okButton { ReadBook.inBookshelf = true }
                     noButton { viewModel.removeFromBookshelf { super.finish() } }
                 }.show().applyTint()
             } else {
@@ -532,10 +398,9 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     override fun observeLiveBus() {
         super.observeLiveBus()
         observeEvent<Int>(Bus.ALOUD_STATE) {
-            readAloudStatus = it
             if (it == Status.STOP || it == Status.PAUSE) {
-                viewModel.curTextChapter?.let { textChapter ->
-                    val page = textChapter.page(viewModel.durPageIndex)
+                ReadBook.curTextChapter?.let { textChapter ->
+                    val page = textChapter.page(ReadBook.durPageIndex)
                     if (page != null && page.text is SpannableStringBuilder) {
                         page.text.removeSpan(ChapterProvider.readAloudSpan)
                         page_view.upContent()
@@ -553,56 +418,31 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             if (it) {
                 onClickReadAloud()
             } else {
-                readAloud(readAloudStatus == Status.PLAY)
+                ReadBook.readAloud(!BaseReadAloudService.pause)
             }
         }
         observeEvent<Boolean>(Bus.UP_CONFIG) {
             upSystemUiVisibility()
+            content_view.upStyle()
             page_view.upBg()
             page_view.upStyle()
             if (it) {
-                loadContent()
+                ReadBook.loadContent()
             } else {
                 page_view.upContent()
             }
         }
-        observeEvent<Int>(Bus.TTS_START) { chapterStart ->
+        observeEventSticky<Int>(Bus.TTS_START) { chapterStart ->
             launch(IO) {
-                viewModel.curTextChapter?.let {
-                    val pageStart = chapterStart - it.getReadLength(viewModel.durPageIndex)
-                    it.page(viewModel.durPageIndex)?.upPageAloudSpan(pageStart)
-                    withContext(Main) {
-                        page_view.upContent()
-                    }
-                }
-            }
-        }
-        observeEvent<Int>(Bus.TTS_TURN_PAGE) {
-            when (it) {
-                1 -> {
-                    if (page_view.isScrollDelegate) {
-                        page_view.moveToNextPage()
-                    } else {
-                        viewModel.durPageIndex = viewModel.durPageIndex + 1
-                        page_view.upContent()
-                        viewModel.saveRead()
-                    }
-                }
-                2 -> if (!moveToNextChapter(true)) ReadAloud.stop(this)
-                -1 -> {
-                    if (viewModel.durPageIndex > 0) {
-                        if (page_view.isScrollDelegate) {
-                            page_view.moveToPrevPage()
-                        } else {
-                            viewModel.durPageIndex = viewModel.durPageIndex - 1
+                if (BaseReadAloudService.isPlay()) {
+                    ReadBook.curTextChapter?.let {
+                        val pageStart = chapterStart - it.getReadLength(ReadBook.durPageIndex)
+                        it.page(ReadBook.durPageIndex)?.upPageAloudSpan(pageStart)
+                        withContext(Main) {
                             page_view.upContent()
-                            viewModel.saveRead()
                         }
-                    } else {
-                        moveToPrevChapter(true)
                     }
                 }
-                -2 -> moveToPrevChapter(false)
             }
         }
         observeEvent<String>(Bus.REPLACE) {

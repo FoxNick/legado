@@ -9,6 +9,7 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.Bus
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.MediaHelp
+import io.legado.app.service.help.ReadBook
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.postEvent
@@ -154,7 +155,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             textChapter?.let {
                 if (readAloudNumber + 1 > it.getReadLength(pageIndex + 1)) {
                     pageIndex++
-                    postEvent(Bus.TTS_TURN_PAGE, 1)
+                    ReadBook.moveToNextPage()
                 }
             }
             postEvent(Bus.TTS_START, readAloudNumber + 1)
@@ -164,7 +165,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             readAloudNumber += contentList[nowSpeak].length + 1
             nowSpeak++
             if (nowSpeak >= contentList.size) {
-                postEvent(Bus.TTS_TURN_PAGE, 2)
+                nextChapter()
             }
         }
 
@@ -173,7 +174,7 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
             textChapter?.let {
                 if (readAloudNumber + start > it.getReadLength(pageIndex + 1)) {
                     pageIndex++
-                    postEvent(Bus.TTS_TURN_PAGE, 1)
+                    ReadBook.moveToNextPage()
                     postEvent(Bus.TTS_START, readAloudNumber + start)
                 }
             }

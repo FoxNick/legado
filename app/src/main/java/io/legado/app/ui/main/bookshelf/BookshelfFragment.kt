@@ -13,9 +13,11 @@ import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.VMBaseFragment
 import io.legado.app.constant.AppConst
+import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getViewModel
@@ -60,6 +62,7 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
             }
             R.id.menu_arrange_bookshelf -> {
             }
+            R.id.menu_download_all -> viewModel.downloadAll()
         }
     }
 
@@ -73,6 +76,7 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
     private fun initRecyclerView() {
         tab_layout.isTabIndicatorFullWidth = false
         tab_layout.tabMode = TabLayout.MODE_SCROLLABLE
+        tab_layout.setSelectedTabIndicatorColor(requireContext().accentColor)
         ATH.applyEdgeEffectColor(view_pager_bookshelf)
         view_pager_bookshelf.adapter = BookshelfAdapter(this, this)
         TabLayoutMediator(tab_layout, view_pager_bookshelf) { tab, position ->
@@ -127,7 +131,8 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
             title = "选择书架布局",
             items = resources.getStringArray(R.array.bookshelf_layout).toList()
         ) { _, index ->
-            putPrefInt("bookshelf", index)
+            putPrefInt(PreferKey.bookshelfLayout, index)
+            activity?.recreate()
         }
     }
 }

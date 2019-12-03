@@ -1,9 +1,8 @@
-package io.legado.app.ui.main.bookshelf
+package io.legado.app.ui.main.bookshelf.books
 
 import android.content.Context
 import io.legado.app.R
 import io.legado.app.base.adapter.ItemViewHolder
-import io.legado.app.base.adapter.SimpleRecyclerAdapter
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.help.ImageLoader
@@ -13,9 +12,8 @@ import kotlinx.android.synthetic.main.item_bookshelf_list.view.*
 import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.sdk27.listeners.onLongClick
 
-class BooksAdapter(context: Context, private val callBack: CallBack) :
-    SimpleRecyclerAdapter<Book>(context, R.layout.item_bookshelf_list) {
-
+class BooksAdapterList(context: Context, private val callBack: CallBack) :
+    BooksAdapter(context, R.layout.item_bookshelf_list) {
 
     override fun convert(holder: ItemViewHolder, item: Book, payloads: MutableList<Any>) {
         with(holder.itemView) {
@@ -62,20 +60,4 @@ class BooksAdapter(context: Context, private val callBack: CallBack) :
         }
     }
 
-    fun notification(bookUrl: String) {
-        for (i in 0 until itemCount) {
-            getItem(i)?.let {
-                if (it.bookUrl == bookUrl) {
-                    notifyItemChanged(i, 5)
-                    return
-                }
-            }
-        }
-    }
-
-    interface CallBack {
-        fun open(book: Book)
-        fun openBookInfo(book: Book)
-        fun isUpdate(bookUrl: String): Boolean
-    }
 }
