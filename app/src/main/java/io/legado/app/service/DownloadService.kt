@@ -11,6 +11,7 @@ import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentHelp
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.WebBook
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.asCoroutineDispatcher
 import java.util.concurrent.Executors
 
@@ -39,12 +40,13 @@ class DownloadService : BaseService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        tasks.clear()
         searchPool.close()
     }
 
     private fun download(bookUrl: String?, start: Int, end: Int) {
         if (bookUrl == null) return
-        val task = Coroutine.async {
+        val task = Coroutine.async(this) {
             val book = App.db.bookDao().getBook(bookUrl) ?: return@async
             val bookSource = App.db.bookSourceDao().getBookSource(book.origin) ?: return@async
             val webBook = WebBook(bookSource)
@@ -55,7 +57,7 @@ class DownloadService : BaseService() {
                             .onStart {
                                 updateNotification(chapter.title)
                             }
-                            .onSuccess { content ->
+                            .onSuccess(IO) { content ->
                                 content?.let {
                                     BookHelp.saveContent(book, chapter, content)
                                 }
