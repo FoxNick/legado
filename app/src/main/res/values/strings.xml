@@ -202,7 +202,7 @@
     <string name="replace_rule_summary">替换规则名称</string>
     <string name="select_action">选择操作</string>
     <string name="select_all">全选</string>
-    <string name="dark_theme">暗色主题</string>
+    <string name="dark_theme">深色模式</string>
     <string name="welcome">启动页</string>
     <string name="download_start">开始下载</string>
     <string name="download_cancel">取消下载</string>
@@ -313,12 +313,12 @@
     <string name="use_to">替换范围，选填书名或者源名</string>
     <string name="menu_action_group">分组</string>
     <string name="download_path">内容缓存路径</string>
+    <string name="cleancache">清理缓存</string>
     <string name="sys_file_picker">系统文件选择器</string>
     <string name="new_version">新版本</string>
     <string name="download_update">下载更新</string>
     <string name="volume_key_page_on_play">朗读时音量键翻页</string>
     <string name="tip_margin_change">Tip边距跟随边距调整</string>
-    <string name="disable_update">禁止更新</string>
     <string name="allow_update">允许更新</string>
     <string name="revert_selection">反转选择</string>
     <string name="search_book_key">搜索书名、作者</string>
