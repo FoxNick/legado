@@ -9,6 +9,7 @@ import android.graphics.BitmapFactory
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.support.v4.media.session.MediaSessionCompat
@@ -121,7 +122,8 @@ class AudioPlayService : BaseService(),
                 AudioPlay.status = Status.PLAY
                 postEvent(Bus.AUDIO_STATE, Status.PLAY)
                 mediaPlayer.reset()
-                mediaPlayer.setDataSource(url)
+                val uri = Uri.parse(url)
+                mediaPlayer.setDataSource(this, uri, AudioPlay.headers())
                 mediaPlayer.prepareAsync()
             } catch (e: Exception) {
                 launch {
@@ -258,14 +260,14 @@ class AudioPlayService : BaseService(),
                             postEvent(Bus.AUDIO_SIZE, chapter.end?.toInt() ?: 0)
                             postEvent(Bus.AUDIO_PROGRESS, position)
                         }
-                        download(chapter)
+                        loadContent(chapter)
                     } ?: removeLoading(index)
                 }
             }
         }
     }
 
-    private fun download(chapter: BookChapter) {
+    private fun loadContent(chapter: BookChapter) {
         AudioPlay.book?.let { book ->
             AudioPlay.webBook?.getContent(book, chapter, scope = this)
                 ?.onSuccess(IO) { content ->

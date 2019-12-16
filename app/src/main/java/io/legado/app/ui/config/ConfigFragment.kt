@@ -10,9 +10,9 @@ import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import io.legado.app.App
 import io.legado.app.R
+import io.legado.app.constant.Bus
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.BookHelp
-import io.legado.app.help.FileHelp
 import io.legado.app.lib.theme.ATH
 import io.legado.app.receiver.SharedReceiverActivity
 import io.legado.app.ui.filechooser.FileChooserDialog
@@ -61,9 +61,8 @@ class ConfigFragment : PreferenceFragmentCompat(),
                 initPath = getPreferenceString(PreferKey.downloadPath)
             )
             PreferKey.cleanCache -> {
-                LogUtils.d("xxx","cleancaches")
-                FileHelp.deleteFile(getPreferenceString(PreferKey.downloadPath))
-                toast("成功清理缓存")
+                BookHelp.clearCache()
+                toast(R.string.clear_cache_success)
             }
         }
         return super.onPreferenceTreeClick(preference)
@@ -79,7 +78,7 @@ class ConfigFragment : PreferenceFragmentCompat(),
             PreferKey.processText -> sharedPreferences?.let {
                 setProcessTextEnable(it.getBoolean("process_text", true))
             }
-            PreferKey.showRss -> postEvent(PreferKey.showRss, PreferKey.showRss)
+            PreferKey.showRss -> postEvent(Bus.SHOW_RSS, "unused")
         }
     }
 

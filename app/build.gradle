@@ -159,6 +159,7 @@ dependencies {
 
     //MarkDown
     implementation 'ru.noties.markwon:core:3.0.2'
+
 }
 
 //apply plugin: 'com.google.gms.google-services'
