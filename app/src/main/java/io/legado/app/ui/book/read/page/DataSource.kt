@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.page
+package io.legado.app.ui.book.read.page
 
 interface DataSource {
     val isScrollDelegate: Boolean
@@ -8,8 +8,6 @@ interface DataSource {
     fun setPageIndex(pageIndex: Int)
 
     fun getChapterPosition(): Int
-
-    fun getChapter(position: Int): TextChapter?
 
     fun getCurrentChapter(): TextChapter?
 

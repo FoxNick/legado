@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.page
+package io.legado.app.ui.book.read.page
 
 import io.legado.app.service.help.ReadBook
 
@@ -19,11 +19,6 @@ class TextPageFactory(dataSource: DataSource) : PageFactory<TextPage>(dataSource
             hasNextChapter()
                     || getCurrentChapter()?.isLastIndex(pageIndex) != true
         }
-    }
-
-    override fun pageAt(index: Int): TextPage {
-        return dataSource.getCurrentChapter()?.page(index)
-            ?: TextPage(index = index, title = "index：$index")
     }
 
     override fun moveToFirst() {

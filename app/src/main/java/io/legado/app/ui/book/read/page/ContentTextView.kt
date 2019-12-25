@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.page
+package io.legado.app.ui.book.read.page
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -241,4 +241,5 @@ class ContentTextView : AppCompatTextView {
             }
         }
     }
+
 }

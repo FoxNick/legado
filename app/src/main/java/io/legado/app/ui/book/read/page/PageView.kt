@@ -1,4 +1,4 @@
-package io.legado.app.ui.widget.page
+package io.legado.app.ui.book.read.page
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -6,11 +6,13 @@ import android.graphics.Canvas
 import android.util.AttributeSet
 import android.view.MotionEvent
 import android.widget.FrameLayout
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.service.help.ReadBook
-import io.legado.app.ui.widget.page.curl.CurlView
-import io.legado.app.ui.widget.page.delegate.*
+import io.legado.app.ui.book.read.page.curl.CurlView
+import io.legado.app.ui.book.read.page.delegate.*
 import io.legado.app.utils.activity
+import io.legado.app.utils.getPrefInt
 
 class PageView(context: Context, attrs: AttributeSet) :
     FrameLayout(context, attrs),
@@ -37,7 +39,7 @@ class PageView(context: Context, attrs: AttributeSet) :
         upBg()
         setWillNotDraw(false)
         pageFactory = TextPageFactory(this)
-        upPageAnim()
+        upPageAnim(context.getPrefInt(PreferKey.pageAnim))
         curPage?.callBack = this
     }
 
@@ -88,7 +90,7 @@ class PageView(context: Context, attrs: AttributeSet) :
         }
     }
 
-    fun upPageAnim(pageAnim: Int = 0) {
+    fun upPageAnim(pageAnim: Int) {
         if (curlView != null) {
             removeView(curlView)
             curlView = null
@@ -190,20 +192,16 @@ class PageView(context: Context, attrs: AttributeSet) :
         return ReadBook.durChapterIndex
     }
 
-    override fun getChapter(position: Int): TextChapter? {
-        return ReadBook.textChapter(position)
-    }
-
     override fun getCurrentChapter(): TextChapter? {
-        return ReadBook.textChapter(0)
+        return if (callBack?.isInitFinish == true) ReadBook.textChapter(0) else null
     }
 
     override fun getNextChapter(): TextChapter? {
-        return ReadBook.textChapter(1)
+        return if (callBack?.isInitFinish == true) ReadBook.textChapter(1) else null
     }
 
     override fun getPreviousChapter(): TextChapter? {
-        return ReadBook.textChapter(-1)
+        return if (callBack?.isInitFinish == true) ReadBook.textChapter(-1) else null
     }
 
     override fun hasNextChapter(): Boolean {
@@ -248,5 +246,6 @@ class PageView(context: Context, attrs: AttributeSet) :
          */
         fun clickCenter()
 
+        val isInitFinish: Boolean
     }
 }

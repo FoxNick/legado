@@ -1,14 +1,15 @@
-package io.legado.app.ui.widget.page
+package io.legado.app.ui.book.read.page
 
 import android.view.ActionMode
 import android.view.Menu
 import android.view.MenuItem
+import android.widget.TextView
 
 import io.legado.app.R
 import io.legado.app.constant.Bus
 import io.legado.app.utils.postEvent
 
-class ContentSelectActionCallback(private val textView: ContentTextView) : ActionMode.Callback {
+class ContentSelectActionCallback(private val textView: TextView) : ActionMode.Callback {
 
     override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
         when (item?.itemId) {
