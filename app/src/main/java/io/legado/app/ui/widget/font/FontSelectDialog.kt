@@ -19,7 +19,7 @@ import java.io.File
 class FontSelectDialog(context: Context) : FontAdapter.CallBack {
 
     private val defaultFolder =
-        Environment.getExternalStorageDirectory().absolutePath + File.separator + "YueDu/Fonts"
+        Environment.getExternalStorageDirectory().absolutePath + File.separator + "YueDu3.0/Fonts"
     private lateinit var adapter: FontAdapter
     private var builder: AlertBuilder<AlertDialog>
     private var dialog: AlertDialog? = null
