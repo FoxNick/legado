@@ -21,6 +21,8 @@ import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.ItemTouchCallback
+import io.legado.app.help.permission.Permissions
+import io.legado.app.help.permission.PermissionsCompat
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.cancelButton
 import io.legado.app.lib.dialogs.customView
@@ -40,6 +42,7 @@ import org.jetbrains.anko.startActivity
 import org.jetbrains.anko.startActivityForResult
 import org.jetbrains.anko.startService
 import org.jetbrains.anko.toast
+import java.io.FileNotFoundException
 
 class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity_book_source),
     BookSourceAdapter.CallBack,
@@ -49,7 +52,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         get() = getViewModel(BookSourceViewModel::class.java)
 
     private val qrRequestCode = 101
-    private val importSource = 13141
+    private val importSource = 132
     private lateinit var adapter: BookSourceAdapter
     private var bookSourceLiveDate: LiveData<List<BookSource>>? = null
     private var groups = hashSetOf<String>()
@@ -82,7 +85,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 supportFragmentManager,
                 "groupManage"
             )
-            R.id.menu_import_source_local -> selectFile()
+            R.id.menu_import_source_local -> selectFileSys()
             R.id.menu_select_all -> adapter.selectAll()
             R.id.menu_revert_selection -> adapter.revertSelection()
             R.id.menu_enable_selection -> viewModel.enableSelection(adapter.getSelectionIds())
@@ -210,26 +213,32 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         }.show().applyTint()
     }
 
+    private fun selectFileSys() {
+        try {
+            val intent = Intent(Intent.ACTION_GET_CONTENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            intent.type = "text/*"//设置类型
+            startActivityForResult(intent, importSource)
+        } catch (e: Exception) {
+            PermissionsCompat.Builder(this)
+                .addPermissions(
+                    Permissions.READ_EXTERNAL_STORAGE,
+                    Permissions.WRITE_EXTERNAL_STORAGE
+                )
+                .rationale(R.string.bg_image_per)
+                .onGranted {
+                    selectFile()
+                }
+                .request()
+        }
+    }
+
     private fun selectFile() {
         FileChooserDialog.show(
             supportFragmentManager, importSource,
-            allowExtensions = arrayOf("txt", "json"),
-            menus = arrayOf(getString(R.string.sys_file_picker))
+            allowExtensions = arrayOf("txt", "json")
         )
-    }
-
-    private fun selectFileSys() {
-        val intent = Intent(Intent.ACTION_GET_CONTENT)
-        intent.addCategory(Intent.CATEGORY_OPENABLE)
-        intent.type = "text/*"//设置类型
-        startActivityForResult(intent, importSource)
-    }
-
-    override fun onMenuClick(menu: String) {
-        super.onMenuClick(menu)
-        when (menu) {
-            getString(R.string.sys_file_picker) -> selectFileSys()
-        }
     }
 
     override fun onFilePicked(requestCode: Int, currentPath: String) {
@@ -284,16 +293,28 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 }
             }
             importSource -> if (resultCode == Activity.RESULT_OK) {
-                data?.data?.let {
-                    val path = FileUtils.getPath(this, it)
-                    if (path != null) {
-                        Snackbar.make(title_bar, R.string.importing, Snackbar.LENGTH_INDEFINITE)
-                            .show()
-                        viewModel.importSourceFromFilePath(path) { msg ->
-                            title_bar.snackbar(msg)
+                data?.data?.let { uri ->
+                    try {
+                        uri.readText(this)?.let {
+                            Snackbar.make(title_bar, R.string.importing, Snackbar.LENGTH_INDEFINITE)
+                                .show()
+                            viewModel.importSource(it) { msg ->
+                                title_bar.snackbar(msg)
+                            }
                         }
-                    } else {
-                        toast(R.string.uri_to_path_fail)
+                    } catch (e: FileNotFoundException) {
+                        PermissionsCompat.Builder(this)
+                            .addPermissions(
+                                Permissions.READ_EXTERNAL_STORAGE,
+                                Permissions.WRITE_EXTERNAL_STORAGE
+                            )
+                            .rationale(R.string.bg_image_per)
+                            .onGranted {
+                                selectFileSys()
+                            }
+                            .request()
+                    } catch (e: Exception) {
+                        toast(e.localizedMessage ?: "ERROR")
                     }
                 }
             }

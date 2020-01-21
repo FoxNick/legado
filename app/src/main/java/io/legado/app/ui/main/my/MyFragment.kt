@@ -1,10 +1,14 @@
 package io.legado.app.ui.main.my
 
+import android.app.Activity
+import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import androidx.documentfile.provider.DocumentFile
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreference
@@ -12,10 +16,12 @@ import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.base.BaseFragment
 import io.legado.app.constant.Bus
+import io.legado.app.constant.PreferKey
 import io.legado.app.help.BookHelp
 import io.legado.app.help.permission.Permissions
 import io.legado.app.help.permission.PermissionsCompat
 import io.legado.app.help.storage.Backup
+import io.legado.app.help.storage.Restore
 import io.legado.app.help.storage.WebDavHelp
 import io.legado.app.lib.theme.ATH
 import io.legado.app.service.WebService
@@ -27,9 +33,12 @@ import io.legado.app.ui.config.ConfigViewModel
 import io.legado.app.ui.replacerule.ReplaceRuleActivity
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.view_title_bar.*
+import kotlinx.coroutines.launch
 import org.jetbrains.anko.startActivity
 
 class MyFragment : BaseFragment(R.layout.fragment_my_config) {
+    private val backupSelectRequestCode = 22
+    private val restoreSelectRequestCode = 33
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         setSupportToolbar(toolbar)
@@ -46,16 +55,114 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config) {
     override fun onCompatOptionsItemSelected(item: MenuItem) {
         when (item.itemId) {
             R.id.menu_help -> startActivity<AboutActivity>()
-            R.id.menu_backup -> PermissionsCompat.Builder(this)
+            R.id.menu_backup -> backup()
+            R.id.menu_restore -> restore()
+        }
+    }
+
+
+    private fun backup() {
+        val backupPath = getPrefString(PreferKey.backupPath)
+        if (backupPath?.isNotEmpty() == true) {
+            val uri = Uri.parse(backupPath)
+            val doc = DocumentFile.fromTreeUri(requireContext(), uri)
+            if (doc?.canWrite() == true) {
+                launch {
+                    Backup.backup(requireContext(), uri)
+                }
+            } else {
+                selectBackupFolder()
+            }
+        } else {
+            selectBackupFolder()
+        }
+    }
+
+    private fun selectBackupFolder() {
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivityForResult(intent, backupSelectRequestCode)
+        } catch (e: java.lang.Exception) {
+            PermissionsCompat.Builder(this)
                 .addPermissions(*Permissions.Group.STORAGE)
                 .rationale(R.string.tip_perm_request_storage)
-                .onGranted { Backup.backup() }
+                .onGranted {
+                    launch {
+                        Backup.backup(requireContext(), null)
+                    }
+                }
                 .request()
-            R.id.menu_restore -> PermissionsCompat.Builder(this)
+        }
+    }
+
+    fun restore() {
+        launch {
+            if (!WebDavHelp.showRestoreDialog(requireContext())) {
+                val backupPath = getPrefString(PreferKey.backupPath)
+                if (backupPath?.isNotEmpty() == true) {
+                    val uri = Uri.parse(backupPath)
+                    val doc = DocumentFile.fromTreeUri(requireContext(), uri)
+                    if (doc?.canWrite() == true) {
+                        Restore.restore(requireContext(), uri)
+                        toast(R.string.restore_success)
+                    } else {
+                        selectBackupFolder()
+                    }
+                } else {
+                    selectRestoreFolder()
+                }
+            }
+        }
+    }
+
+    private fun selectRestoreFolder() {
+        try {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivityForResult(intent, restoreSelectRequestCode)
+        } catch (e: java.lang.Exception) {
+            PermissionsCompat.Builder(this)
                 .addPermissions(*Permissions.Group.STORAGE)
                 .rationale(R.string.tip_perm_request_storage)
-                .onGranted { WebDavHelp.showRestoreDialog(requireContext()) }
+                .onGranted {
+                    launch {
+                        Restore.restore(Backup.legadoPath)
+                        toast(R.string.restore_success)
+                    }
+                }
                 .request()
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        when (requestCode) {
+            backupSelectRequestCode -> if (resultCode == Activity.RESULT_OK) {
+                data?.data?.let { uri ->
+                    requireContext().contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                    putPrefString(PreferKey.backupPath, uri.toString())
+                    launch {
+                        Backup.backup(requireContext(), uri)
+                    }
+                }
+            }
+            restoreSelectRequestCode -> if (resultCode == Activity.RESULT_OK) {
+                data?.data?.let { uri ->
+                    requireContext().contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    )
+                    putPrefString(PreferKey.backupPath, uri.toString())
+                    launch {
+                        Restore.restore(requireContext(), uri)
+                        toast(R.string.restore_success)
+                    }
+                }
+            }
         }
     }
 

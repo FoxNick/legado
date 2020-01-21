@@ -72,8 +72,8 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
         val books = arrayListOf<SearchBook>()
         searchBooks.forEach { searchBook ->
             if (context.getPrefBoolean(PreferKey.precisionSearch)) {
-                if (searchBook.name.contains(searchKey)
-                    || searchBook.author.contains(searchKey)
+                if (searchBook.name.equals(searchKey, true)
+                    || searchBook.author.equals(searchKey, true)
                 ) books.add(searchBook)
             } else
                 books.add(searchBook)
@@ -93,9 +93,7 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
                 //存在
                 for (temp in newDataS) {
                     var hasSame = false
-                    var i = 0
-                    val size = copyDataS.size
-                    while (i < size) {
+                    for (i in copyDataS.indices) {
                         val searchBook = copyDataS[i]
                         if (temp.name == searchBook.name
                             && temp.author == searchBook.author
@@ -104,7 +102,6 @@ class SearchViewModel(application: Application) : BaseViewModel(application) {
                             searchBook.addOrigin(temp.bookUrl)
                             break
                         }
-                        i++
                     }
                     if (!hasSame) {
                         searchBooksAdd.add(temp)

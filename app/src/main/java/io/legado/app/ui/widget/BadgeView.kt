@@ -36,6 +36,7 @@ class BadgeView @JvmOverloads constructor(
             text = text
         }
     private var radius: Float = 0.toFloat()
+    private var flatangle: Boolean
 
     val badgeCount: Int?
         get() {
@@ -74,6 +75,13 @@ class BadgeView @JvmOverloads constructor(
         }
 
     init {
+        val typedArray = context.obtainStyledAttributes(attrs, R.styleable.BadgeView)
+        val radios =
+            typedArray.getDimensionPixelOffset(R.styleable.BadgeView_bv_radius, 8)
+        flatangle =
+            typedArray.getBoolean(R.styleable.BadgeView_up_flat_angle, false)
+        typedArray.recycle()
+
         if (layoutParams !is LayoutParams) {
             val layoutParams = LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -88,7 +96,7 @@ class BadgeView @JvmOverloads constructor(
         //setTypeface(Typeface.DEFAULT_BOLD);
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
         setPadding(dip2Px(5f), dip2Px(1f), dip2Px(5f), dip2Px(1f))
-        radius = 8f
+        radius = radios.toFloat()
 
         // set default background
         setBackground(radius, context.accentColor)
@@ -103,17 +111,10 @@ class BadgeView @JvmOverloads constructor(
     }
 
     fun setBackground(dipRadius: Float, badgeColor: Int) {
-        val radius = dip2Px(dipRadius)
-        val radiusArray = floatArrayOf(
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat(),
-            radius.toFloat()
-        )
+        val radius = dip2Px(dipRadius).toFloat()
+        val radiusArray =
+            floatArrayOf(radius, radius, radius, radius, radius, radius, radius, radius)
+        if (flatangle) { radiusArray.fill(0f, 0, 3) }
 
         val roundRect = RoundRectShape(radiusArray, null, null)
         val bgDrawable = ShapeDrawable(roundRect)

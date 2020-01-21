@@ -140,4 +140,9 @@
     <declare-styleable name="ATEAccentBgTextView">
         <attr name="abt_radius" format="dimension" />
     </declare-styleable>
+
+    <declare-styleable name="BadgeView">
+        <attr name="bv_radius" format="dimension" />
+        <attr name="up_flat_angle" format="boolean" />
+    </declare-styleable>
 </resources>
