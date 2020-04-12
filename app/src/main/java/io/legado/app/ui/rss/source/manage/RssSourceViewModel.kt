@@ -1,15 +1,15 @@
 package io.legado.app.ui.rss.source.manage
 
 import android.app.Application
+import android.net.Uri
 import android.text.TextUtils
+import androidx.documentfile.provider.DocumentFile
 import com.jayway.jsonpath.JsonPath
 import io.legado.app.App
+import io.legado.app.R
 import io.legado.app.base.BaseViewModel
-import io.legado.app.data.api.IHttpGetApi
 import io.legado.app.data.entities.RssSource
-import io.legado.app.help.FileHelp
 import io.legado.app.help.http.HttpHelper
-import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.Restore.jsonPath
 import io.legado.app.utils.*
 import org.jetbrains.anko.toast
@@ -42,34 +42,52 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
         }
     }
 
-    fun enableSelection(ids: LinkedHashSet<String>) {
+    fun enableSelection(sources: LinkedHashSet<RssSource>) {
         execute {
-            App.db.rssSourceDao().enableSection(*ids.toTypedArray())
-        }
-    }
-
-    fun disableSelection(ids: LinkedHashSet<String>) {
-        execute {
-            App.db.rssSourceDao().disableSection(*ids.toTypedArray())
-        }
-    }
-
-    fun delSelection(ids: LinkedHashSet<String>) {
-        execute {
-            App.db.rssSourceDao().delSection(*ids.toTypedArray())
-        }
-    }
-
-    fun exportSelection(ids: LinkedHashSet<String>) {
-        execute {
-            App.db.rssSourceDao().getRssSources(*ids.toTypedArray()).let {
-                val json = GSON.toJson(it)
-                val file =
-                    FileHelp.getFile(Backup.exportPath + File.separator + "exportRssSource.json")
-                file.writeText(json)
+            val list = arrayListOf<RssSource>()
+            sources.forEach {
+                list.add(it.copy(enabled = true))
             }
+            App.db.rssSourceDao().update(*list.toTypedArray())
+        }
+    }
+
+    fun disableSelection(sources: LinkedHashSet<RssSource>) {
+        execute {
+            val list = arrayListOf<RssSource>()
+            sources.forEach {
+                list.add(it.copy(enabled = false))
+            }
+            App.db.rssSourceDao().update(*list.toTypedArray())
+        }
+    }
+
+    fun delSelection(sources: LinkedHashSet<RssSource>) {
+        execute {
+            App.db.rssSourceDao().delete(*sources.toTypedArray())
+        }
+    }
+
+    fun exportSelection(sources: LinkedHashSet<RssSource>, file: File) {
+        execute {
+            val json = GSON.toJson(sources)
+            FileUtils.createFileIfNotExist(file, "exportRssSource.json")
+                .writeText(json)
         }.onSuccess {
-            context.toast("成功导出至\n${Backup.exportPath}")
+            context.toast("成功导出至\n${file.absolutePath}")
+        }.onError {
+            context.toast("导出失败\n${it.localizedMessage}")
+        }
+    }
+
+    fun exportSelection(sources: LinkedHashSet<RssSource>, doc: DocumentFile) {
+        execute {
+            val json = GSON.toJson(sources)
+            doc.findFile("exportRssSource.json")?.delete()
+            doc.createFile("", "exportRssSource.json")
+                ?.writeText(context, json)
+        }.onSuccess {
+            context.toast("成功导出至\n${doc.uri.path}")
         }.onError {
             context.toast("导出失败\n${it.localizedMessage}")
         }
@@ -117,12 +135,26 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
 
     fun importSourceFromFilePath(path: String, finally: (msg: String) -> Unit) {
         execute {
-            val file = File(path)
-            if (file.exists()) {
-                GSON.fromJsonArray<RssSource>(file.readText())?.let {
+            val content = if (path.isContentPath()) {
+                //在前面被解码了，如果不进行编码，中文会无法识别
+                val newPath = Uri.encode(path, ":/.")
+                DocumentFile.fromSingleUri(context, Uri.parse(newPath))?.readText(context)
+            } else {
+                val file = File(path)
+                if (file.exists()) {
+                    file.readText()
+                } else {
+                    null
+                }
+            }
+
+            if (null != content) {
+                GSON.fromJsonArray<RssSource>(content)?.let {
                     App.db.rssSourceDao().insert(*it.toTypedArray())
                 }
             }
+        }.onSuccess {
+            finally.invoke(context.getString(R.string.success))
         }
     }
 
@@ -167,25 +199,23 @@ class RssSourceViewModel(application: Application) : BaseViewModel(application) 
         }.onError {
             finally(it.localizedMessage ?: "")
         }.onSuccess {
-            finally(it ?: "导入完成")
+            finally(it)
         }
     }
 
     private fun importSourceUrl(url: String): Int {
-        NetworkUtils.getBaseUrl(url)?.let {
-            val response = HttpHelper.getApiService<IHttpGetApi>(it).get(url, mapOf()).execute()
-            response.body()?.let { body ->
-                val sources = mutableListOf<RssSource>()
-                val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
-                for (item in items) {
-                    val jsonItem = jsonPath.parse(item)
-                    GSON.fromJsonObject<RssSource>(jsonItem.jsonString())?.let { source ->
-                        sources.add(source)
-                    }
+        HttpHelper.simpleGet(url)?.let { body ->
+            val sources = mutableListOf<RssSource>()
+            val items: List<Map<String, Any>> = jsonPath.parse(body).read("$")
+            for (item in items) {
+                val jsonItem = jsonPath.parse(item)
+                GSON.fromJsonObject<RssSource>(jsonItem.jsonString())?.let { source ->
+                    sources.add(source)
                 }
-                App.db.rssSourceDao().insert(*sources.toTypedArray())
-                return sources.size
             }
+            App.db.rssSourceDao().insert(*sources.toTypedArray())
+            return sources.size
+
         }
         return 0
     }

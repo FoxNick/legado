@@ -1,13 +1,18 @@
+@file:Suppress("unused")
 package io.legado.app.utils
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.Intent
+import android.content.*
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
+import android.net.Uri
+import android.os.BatteryManager
+import android.provider.Settings
 import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
+import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
@@ -24,9 +29,11 @@ import java.io.FileOutputStream
 fun Context.getPrefBoolean(key: String, defValue: Boolean = false) =
     defaultSharedPreferences.getBoolean(key, defValue)
 
+fun Context.getPrefBoolean(@StringRes keyId: Int, defValue: Boolean = false) =
+    defaultSharedPreferences.getBoolean(getString(keyId), defValue)
+
 fun Context.putPrefBoolean(key: String, value: Boolean = false) =
     defaultSharedPreferences.edit { putBoolean(key, value) }
-
 
 fun Context.getPrefInt(key: String, defValue: Int = 0) =
     defaultSharedPreferences.getInt(key, defValue)
@@ -42,6 +49,9 @@ fun Context.putPrefLong(key: String, value: Long) =
 
 fun Context.getPrefString(key: String, defValue: String? = null) =
     defaultSharedPreferences.getString(key, defValue)
+
+fun Context.getPrefString(@StringRes keyId: Int, defValue: String? = null) =
+    defaultSharedPreferences.getString(getString(keyId), defValue)
 
 fun Context.putPrefString(key: String, value: String) =
     defaultSharedPreferences.edit { putString(key, value) }
@@ -63,25 +73,30 @@ fun Context.getCompatDrawable(@DrawableRes id: Int): Drawable? = ContextCompat.g
 fun Context.getCompatColorStateList(@ColorRes id: Int): ColorStateList? =
     ContextCompat.getColorStateList(this, id)
 
-fun Context.getStatusBarHeight(): Int {
-    val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
-    return resources.getDimensionPixelSize(resourceId)
+/**
+ * 系统息屏时间
+ */
+val Context.sysScreenOffTime: Int
+    get() {
+        var screenOffTime = 0
+        try {
+            screenOffTime = Settings.System.getInt(contentResolver, Settings.System.SCREEN_OFF_TIMEOUT)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return screenOffTime
 }
 
-fun Context.getNavigationBarHeight(): Int {
-    val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
-    return resources.getDimensionPixelSize(resourceId)
+val Context.statusBarHeight: Int
+    get() {
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return resources.getDimensionPixelSize(resourceId)
 }
 
-fun Context.shareText(title: String, text: String) {
-    try {
-        val textIntent = Intent(Intent.ACTION_SEND)
-        textIntent.type = "text/plain"
-        textIntent.putExtra(Intent.EXTRA_TEXT, text)
-        startActivity(Intent.createChooser(textIntent, title))
-    } catch (e: Exception) {
-        toast(R.string.can_not_share)
-    }
+val Context.navigationBarHeight: Int
+    get() {
+        val resourceId = resources.getIdentifier("navigation_bar_height", "dimen", "android")
+        return resources.getDimensionPixelSize(resourceId)
 }
 
 @SuppressLint("SetWorldReadable")
@@ -115,11 +130,52 @@ fun Context.shareWithQr(title: String, text: String) {
     }
 }
 
-val Context.isNightTheme: Boolean
-    get() = getPrefBoolean("isNightTheme")
+fun Context.sendToClip(text: String) {
+    val clipboard =
+        getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+    val clipData = ClipData.newPlainText(null, text)
+    clipboard?.let {
+        clipboard.setPrimaryClip(clipData)
+        toast(R.string.copy_complete)
+    }
+}
 
-val Context.isTransparentStatusBar: Boolean
-    get() = getPrefBoolean("transparentStatusBar", true)
+/**
+ * 系统是否暗色主题
+ */
+fun Context.sysIsDarkMode(): Boolean {
+    val mode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
+    return mode == Configuration.UI_MODE_NIGHT_YES
+}
 
-val Context.isShowRSS: Boolean
-    get() = getPrefBoolean("showRss", true)
+/**
+ * 获取电量
+ */
+val Context.sysBattery: Int
+    get() {
+        val iFilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+        val batteryStatus = registerReceiver(null, iFilter)
+        return batteryStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+}
+
+fun Context.openUrl(url: String) {
+    openUrl(Uri.parse(url))
+}
+
+fun Context.openUrl(uri: Uri) {
+    val intent = Intent(Intent.ACTION_VIEW)
+    intent.data = uri
+    if (intent.resolveActivity(packageManager) != null) {
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            toast(e.localizedMessage ?: "open url error")
+        }
+    } else {
+        try {
+            startActivity(Intent.createChooser(intent, "请选择浏览器"))
+        } catch (e: Exception) {
+            toast(e.localizedMessage ?: "open url error")
+        }
+    }
+}

@@ -47,6 +47,18 @@ data class BookSource(
     var ruleToc: String? = null,                    // 目录页规则
     var ruleContent: String? = null                 // 正文页规则
 ) : Parcelable, JsExtensions {
+
+    override fun hashCode(): Int {
+        return bookSourceUrl.hashCode()
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other is BookSource) {
+            return other.bookSourceUrl == bookSourceUrl
+        }
+        return false
+    }
+
     @Ignore
     @IgnoredOnParcel
     private var searchRuleV: SearchRule? = null
@@ -126,6 +138,16 @@ data class BookSource(
         return contentRuleV!!
     }
 
+    fun addGroup(group: String) {
+        bookSourceGroup?.let {
+            if (!it.contains(group)) {
+                bookSourceGroup = "$it;$group"
+            }
+        } ?: let {
+            bookSourceGroup = group
+        }
+    }
+
     fun getExploreKinds(): ArrayList<ExploreKind>? {
         val exploreKinds = arrayListOf<ExploreKind>()
         exploreUrl?.let {
@@ -147,7 +169,7 @@ data class BookSource(
                         }
                     }
                     val b = a.split("(&&|\n)+".toRegex())
-                    b.map { c ->
+                    b.forEach { c ->
                         val d = c.split("::")
                         if (d.size > 1)
                             exploreKinds.add(ExploreKind(d[0], d[1]))

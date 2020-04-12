@@ -8,8 +8,7 @@ import androidx.lifecycle.Observer
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
 import io.legado.app.data.entities.Book
-import io.legado.app.help.ImageLoader
-import io.legado.app.ui.changecover.ChangeCoverDialog
+import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.utils.getViewModel
 import kotlinx.android.synthetic.main.activity_book_info_edit.*
 import org.jetbrains.anko.sdk27.listeners.onClick
@@ -59,10 +58,8 @@ class BookInfoEditActivity :
     }
 
     private fun upCover() {
-        viewModel.book?.getDisplayCover()?.let {
-            ImageLoader.load(this, it)
-                .centerCrop()
-                .into(iv_cover)
+        viewModel.book.let {
+            iv_cover.load(it?.getDisplayCover(), it?.name, it?.author)
         }
     }
 

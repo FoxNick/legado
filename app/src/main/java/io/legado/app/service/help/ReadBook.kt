@@ -12,40 +12,61 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.WebBook
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.book.read.page.ChapterProvider
-import io.legado.app.ui.book.read.page.TextChapter
-import kotlinx.coroutines.*
-import kotlinx.coroutines.Dispatchers.Main
+import io.legado.app.ui.book.read.page.entities.TextChapter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import org.jetbrains.anko.toast
 
 
 object ReadBook {
-
     var titleDate = MutableLiveData<String>()
     var book: Book? = null
     var inBookshelf = false
     var chapterSize = 0
-    var callBack: CallBack? = null
     var durChapterIndex = 0
     var durPageIndex = 0
     var isLocalBook = true
+    var callBack: CallBack? = null
     var prevTextChapter: TextChapter? = null
     var curTextChapter: TextChapter? = null
     var nextTextChapter: TextChapter? = null
     var webBook: WebBook? = null
+    var msg: String? = null
     private val loadingChapters = arrayListOf<Int>()
 
-    fun resetData(book: Book) {
+    fun resetData(book: Book, noSource: (name: String, author: String) -> Unit) {
         this.book = book
         titleDate.postValue(book.name)
         durChapterIndex = book.durChapterIndex
         durPageIndex = book.durChapterPos
         isLocalBook = book.origin == BookType.local
-        App.db.bookSourceDao().getBookSource(book.origin)?.let {
-            webBook = WebBook(it)
-        }
         chapterSize = 0
         prevTextChapter = null
         curTextChapter = null
         nextTextChapter = null
+        upWebBook(book, noSource)
+    }
+
+    fun upWebBook(book: Book?, noSource: (name: String, author: String) -> Unit) {
+        book ?: return
+        if (book.origin == BookType.local) {
+            webBook = null
+        } else {
+            val bookSource = App.db.bookSourceDao().getBookSource(book.origin)
+            if (bookSource != null) {
+                webBook = WebBook(bookSource)
+            } else {
+                webBook = null
+                noSource.invoke(book.name, book.author)
+            }
+        }
+    }
+
+    fun upMsg(msg: String?) {
+        this.msg = msg
+        callBack?.upContent()
     }
 
     fun moveToNextPage() {
@@ -63,11 +84,11 @@ object ReadBook {
             nextTextChapter = null
             book?.let {
                 if (curTextChapter == null) {
-                    loadContent(durChapterIndex)
+                    loadContent(durChapterIndex, upContent, false)
                 } else if (upContent) {
                     callBack?.upContent()
                 }
-                loadContent(durChapterIndex.plus(1))
+                loadContent(durChapterIndex.plus(1), upContent, false)
                 GlobalScope.launch(Dispatchers.IO) {
                     for (i in 2..10) {
                         delay(100)
@@ -93,11 +114,11 @@ object ReadBook {
             prevTextChapter = null
             book?.let {
                 if (curTextChapter == null) {
-                    loadContent(durChapterIndex)
+                    loadContent(durChapterIndex, upContent, false)
                 } else if (upContent) {
                     callBack?.upContent()
                 }
-                loadContent(durChapterIndex.minus(1))
+                loadContent(durChapterIndex.minus(1), upContent, false)
                 GlobalScope.launch(Dispatchers.IO) {
                     for (i in -5..-2) {
                         delay(100)
@@ -121,7 +142,13 @@ object ReadBook {
         saveRead()
     }
 
-    fun curPageChanged() {
+    fun setPageIndex(pageIndex: Int) {
+        durPageIndex = pageIndex
+        saveRead()
+        curPageChanged()
+    }
+
+    private fun curPageChanged() {
         callBack?.upPageProgress()
         if (BaseReadAloudService.isRun) {
             readAloud(!BaseReadAloudService.pause)
@@ -172,21 +199,21 @@ object ReadBook {
     /**
      * 加载章节内容
      */
-    fun loadContent() {
-        loadContent(durChapterIndex)
-        loadContent(durChapterIndex + 1)
-        loadContent(durChapterIndex - 1)
+    fun loadContent(resetPageOffset: Boolean) {
+        loadContent(durChapterIndex, resetPageOffset = resetPageOffset)
+        loadContent(durChapterIndex + 1, resetPageOffset = resetPageOffset)
+        loadContent(durChapterIndex - 1, resetPageOffset = resetPageOffset)
     }
 
-    fun loadContent(index: Int) {
+    fun loadContent(index: Int, upContent: Boolean = true, resetPageOffset: Boolean) {
         book?.let { book ->
             if (addLoading(index)) {
                 Coroutine.async {
                     App.db.bookChapterDao().getChapter(book.bookUrl, index)?.let { chapter ->
                         BookHelp.getContent(book, chapter)?.let {
-                            contentLoadFinish(chapter, it)
+                            contentLoadFinish(chapter, it, upContent, resetPageOffset)
                             removeLoading(chapter.index)
-                        } ?: download(chapter)
+                        } ?: download(chapter, resetPageOffset = resetPageOffset)
                     } ?: removeLoading(index)
                 }.onError {
                     removeLoading(index)
@@ -197,13 +224,14 @@ object ReadBook {
 
     private fun download(index: Int) {
         book?.let { book ->
+            if (book.isLocalBook()) return
             if (addLoading(index)) {
                 Coroutine.async {
                     App.db.bookChapterDao().getChapter(book.bookUrl, index)?.let { chapter ->
                         if (BookHelp.hasContent(book, chapter)) {
                             removeLoading(chapter.index)
                         } else {
-                            download(chapter)
+                            download(chapter, false)
                         }
                     } ?: removeLoading(index)
                 }.onError {
@@ -213,20 +241,28 @@ object ReadBook {
         }
     }
 
-    private fun download(chapter: BookChapter) {
+    private fun download(chapter: BookChapter, resetPageOffset: Boolean) {
         book?.let { book ->
             webBook?.getContent(book, chapter)
                 ?.onSuccess(Dispatchers.IO) { content ->
-                    if (content.isNullOrEmpty()) {
-                        contentLoadFinish(chapter, App.INSTANCE.getString(R.string.content_empty))
+                    if (content.isEmpty()) {
+                        contentLoadFinish(
+                            chapter,
+                            App.INSTANCE.getString(R.string.content_empty),
+                            resetPageOffset = resetPageOffset
+                        )
                         removeLoading(chapter.index)
                     } else {
                         BookHelp.saveContent(book, chapter, content)
-                        contentLoadFinish(chapter, content)
+                        contentLoadFinish(chapter, content, resetPageOffset = resetPageOffset)
                         removeLoading(chapter.index)
                     }
                 }?.onError {
-                    contentLoadFinish(chapter, it.localizedMessage ?: "未知错误")
+                    contentLoadFinish(
+                        chapter,
+                        it.localizedMessage ?: "未知错误",
+                        resetPageOffset = resetPageOffset
+                    )
                     removeLoading(chapter.index)
                 }
         }
@@ -249,7 +285,12 @@ object ReadBook {
     /**
      * 内容加载完成
      */
-    private fun contentLoadFinish(chapter: BookChapter, content: String) {
+    private fun contentLoadFinish(
+        chapter: BookChapter,
+        content: String,
+        upContent: Boolean = true,
+        resetPageOffset: Boolean
+    ) {
         Coroutine.async {
             if (chapter.index in durChapterIndex - 1..durChapterIndex + 1) {
                 val c = BookHelp.disposeContent(
@@ -260,23 +301,26 @@ object ReadBook {
                     book!!.useReplaceRule
                 )
                 when (chapter.index) {
-                    durChapterIndex -> withContext(Main) {
+                    durChapterIndex -> {
                         curTextChapter = ChapterProvider.getTextChapter(chapter, c, chapterSize)
-                        callBack?.upContent()
+                        if (upContent) callBack?.upContent(resetPageOffset = resetPageOffset)
                         callBack?.upView()
                         curPageChanged()
                         callBack?.contentLoadFinish()
                     }
-                    durChapterIndex - 1 -> withContext(Main) {
+                    durChapterIndex - 1 -> {
                         prevTextChapter = ChapterProvider.getTextChapter(chapter, c, chapterSize)
-                        callBack?.upContent(-1)
+                        if (upContent) callBack?.upContent(-1, resetPageOffset)
                     }
-                    durChapterIndex + 1 -> withContext(Main) {
+                    durChapterIndex + 1 -> {
                         nextTextChapter = ChapterProvider.getTextChapter(chapter, c, chapterSize)
-                        callBack?.upContent(1)
+                        if (upContent) callBack?.upContent(1, resetPageOffset)
                     }
                 }
             }
+        }.onError {
+            it.printStackTrace()
+            App.INSTANCE.toast(it.localizedMessage ?: "ChapterProvider ERROR")
         }
     }
 
@@ -287,7 +331,7 @@ object ReadBook {
                 book.durChapterTime = System.currentTimeMillis()
                 book.durChapterIndex = durChapterIndex
                 book.durChapterPos = durPageIndex
-                curTextChapter?.let {
+                App.db.bookChapterDao().getChapter(book.bookUrl, durChapterIndex)?.let {
                     book.durChapterTitle = it.title
                 }
                 App.db.bookDao().update(book)
@@ -296,7 +340,7 @@ object ReadBook {
     }
 
     interface CallBack {
-        fun upContent(position: Int = 0)
+        fun upContent(relativePosition: Int = 0, resetPageOffset: Boolean = true)
         fun upView()
         fun upPageProgress()
         fun contentLoadFinish()

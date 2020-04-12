@@ -3,7 +3,9 @@ package io.legado.app.ui.config
 import android.os.Bundle
 import io.legado.app.R
 import io.legado.app.base.VMBaseActivity
+import io.legado.app.constant.EventBus
 import io.legado.app.utils.getViewModel
+import io.legado.app.utils.observeEvent
 import kotlinx.android.synthetic.main.activity_config.*
 
 class ConfigActivity : VMBaseActivity<ConfigViewModel>(R.layout.activity_config) {
@@ -18,9 +20,9 @@ class ConfigActivity : VMBaseActivity<ConfigViewModel>(R.layout.activity_config)
         when (viewModel.configType) {
             ConfigViewModel.TYPE_CONFIG -> {
                 title_bar.title = getString(R.string.other_setting)
-                val fTag = "configFragment"
+                val fTag = "otherConfigFragment"
                 var configFragment = supportFragmentManager.findFragmentByTag(fTag)
-                if (configFragment == null) configFragment = ConfigFragment()
+                if (configFragment == null) configFragment = OtherConfigFragment()
                 supportFragmentManager.beginTransaction()
                     .replace(R.id.configFrameLayout, configFragment, fTag)
                     .commit()
@@ -36,9 +38,9 @@ class ConfigActivity : VMBaseActivity<ConfigViewModel>(R.layout.activity_config)
             }
             ConfigViewModel.TYPE_WEB_DAV_CONFIG -> {
                 title_bar.title = getString(R.string.backup_restore)
-                val fTag = "webDavFragment"
+                val fTag = "backupConfigFragment"
                 var configFragment = supportFragmentManager.findFragmentByTag(fTag)
-                if (configFragment == null) configFragment = WebDavConfigFragment()
+                if (configFragment == null) configFragment = BackupConfigFragment()
                 supportFragmentManager.beginTransaction()
                     .replace(R.id.configFrameLayout, configFragment, fTag)
                     .commit()
@@ -47,4 +49,10 @@ class ConfigActivity : VMBaseActivity<ConfigViewModel>(R.layout.activity_config)
 
     }
 
+    override fun observeLiveBus() {
+        super.observeLiveBus()
+        observeEvent<String>(EventBus.RECREATE) {
+            recreate()
+        }
+    }
 }

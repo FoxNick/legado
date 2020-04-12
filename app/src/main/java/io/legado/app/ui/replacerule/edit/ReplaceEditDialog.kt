@@ -9,12 +9,14 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import androidx.appcompat.widget.Toolbar
 import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.Observer
 import io.legado.app.R
 import io.legado.app.constant.Theme
 import io.legado.app.data.entities.ReplaceRule
 import io.legado.app.utils.applyTint
 import io.legado.app.utils.getViewModel
+import io.legado.app.utils.toast
 import kotlinx.android.synthetic.main.dialog_replace_edit.*
 
 class ReplaceEditDialog : DialogFragment(),
@@ -22,14 +24,19 @@ class ReplaceEditDialog : DialogFragment(),
 
     companion object {
 
-        fun newInstance(id: Long? = null): ReplaceEditDialog {
+        fun show(
+            fragmentManager: FragmentManager,
+            id: Long = -1,
+            pattern: String? = null,
+            isRegex: Boolean = false
+        ) {
             val dialog = ReplaceEditDialog()
-            id?.let {
-                val bundle = Bundle()
-                bundle.putLong("id", id)
-                dialog.arguments = bundle
-            }
-            return dialog
+            val bundle = Bundle()
+            bundle.putLong("id", id)
+            bundle.putString("pattern", pattern)
+            bundle.putBoolean("isRegex", isRegex)
+            dialog.arguments = bundle
+            dialog.show(fragmentManager, "editReplace")
         }
     }
 
@@ -56,7 +63,7 @@ class ReplaceEditDialog : DialogFragment(),
         tool_bar.inflateMenu(R.menu.replace_edit)
         tool_bar.menu.applyTint(requireContext(), Theme.getTheme())
         tool_bar.setOnMenuItemClickListener(this)
-        viewModel.replaceRuleData.observe(this, Observer {
+        viewModel.replaceRuleData.observe(viewLifecycleOwner, Observer {
             upReplaceView(it)
         })
         arguments?.let {
@@ -67,8 +74,15 @@ class ReplaceEditDialog : DialogFragment(),
     override fun onMenuItemClick(item: MenuItem?): Boolean {
         when (item?.itemId) {
             R.id.menu_save -> {
-                viewModel.save(getReplaceRule()) {
-                    dismiss()
+                val rule = getReplaceRule();
+                if (!rule.isValid()){
+                    toast(R.string.replace_rule_invalid)
+                }
+                else{
+                    viewModel.save(rule) {
+                        callBack?.onReplaceRuleSave()
+                        dismiss()
+                    }
                 }
             }
         }
@@ -93,5 +107,11 @@ class ReplaceEditDialog : DialogFragment(),
         replaceRule.replacement = et_replace_to.text.toString()
         replaceRule.scope = et_scope.text.toString()
         return replaceRule
+    }
+
+    val callBack get() = activity as? CallBack
+
+    interface CallBack {
+        fun onReplaceRuleSave()
     }
 }

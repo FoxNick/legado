@@ -4,21 +4,17 @@ import android.annotation.SuppressLint
 import android.text.TextUtils
 import androidx.annotation.Keep
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
-import io.legado.app.constant.Pattern.EXP_PATTERN
-import io.legado.app.constant.Pattern.JS_PATTERN
-import io.legado.app.data.api.IHttpGetApi
-import io.legado.app.data.api.IHttpPostApi
+import io.legado.app.constant.AppPattern.EXP_PATTERN
+import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.help.JsExtensions
-import io.legado.app.help.http.AjaxWebView
-import io.legado.app.help.http.HttpHelper
-import io.legado.app.help.http.RequestMethod
-import io.legado.app.help.http.Res
+import io.legado.app.help.http.*
+import io.legado.app.help.http.api.HttpGetApi
+import io.legado.app.help.http.api.HttpPostApi
 import io.legado.app.utils.*
 import okhttp3.FormBody
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MediaType
 import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
 import java.net.URLEncoder
 import java.util.*
@@ -43,7 +39,7 @@ class AnalyzeUrl(
 ) : JsExtensions {
     companion object {
         private val pagePattern = Pattern.compile("<(.*?)>")
-        private val jsonType = "application/json; charset=utf-8".toMediaTypeOrNull()
+        private val jsonType = MediaType.parse("application/json; charset=utf-8")
     }
 
     private var baseUrl: String = ""
@@ -162,7 +158,7 @@ class AnalyzeUrl(
         }
         if (urlArray.size > 1) {
             val options = GSON.fromJsonObject<Map<String, String>>(urlArray[1])
-            options?.let {
+            options?.let { _ ->
                 options["method"]?.let { if (it.equals("POST", true)) method = RequestMethod.POST }
                 options["headers"]?.let { headers ->
                     GSON.fromJsonObject<Map<String, String>>(headers)?.let { headerMap.putAll(it) }
@@ -185,7 +181,7 @@ class AnalyzeUrl(
             RequestMethod.POST -> {
                 bodyTxt?.let {
                     if (it.isJson()) {
-                        body = it.toRequestBody(jsonType)
+                        body = RequestBody.create(jsonType, it)
                     } else {
                         analyzeFields(it)
                     }
@@ -243,31 +239,35 @@ class AnalyzeUrl(
     }
 
     @Throws(Exception::class)
-    fun getResponse(): Call<String> {
+    fun getResponse(tag: String): Call<String> {
+        val cookie = CookieStore.getCookie(tag)
+        if (cookie.isNotEmpty()) {
+            headerMap["Cookie"] = cookie
+        }
         return when {
             method == RequestMethod.POST -> {
                 if (fieldMap.isNotEmpty()) {
                     HttpHelper
-                        .getApiService<IHttpPostApi>(baseUrl)
+                        .getApiService<HttpPostApi>(baseUrl, charset)
                         .postMap(url, fieldMap, headerMap)
                 } else {
                     HttpHelper
-                        .getApiService<IHttpPostApi>(baseUrl)
+                        .getApiService<HttpPostApi>(baseUrl, charset)
                         .postBody(url, body!!, headerMap)
                 }
             }
             fieldMap.isEmpty() -> HttpHelper
-                .getApiService<IHttpGetApi>(baseUrl)
+                .getApiService<HttpGetApi>(baseUrl, charset)
                 .get(url, headerMap)
             else -> HttpHelper
-                .getApiService<IHttpGetApi>(baseUrl)
+                .getApiService<HttpGetApi>(baseUrl, charset)
                 .getMap(url, fieldMap, headerMap)
         }
     }
 
     @Throws(Exception::class)
     suspend fun getResponseAwait(
-        tag: String? = null,
+        tag: String,
         jsStr: String? = null,
         sourceRegex: String? = null
     ): Res {
@@ -278,30 +278,31 @@ class AnalyzeUrl(
             params.javaScript = jsStr
             params.sourceRegex = sourceRegex
             params.postData = bodyTxt?.toByteArray()
+            params.tag = tag
             return HttpHelper.ajax(params)
+        }
+        val cookie = CookieStore.getCookie(tag)
+        if (cookie.isNotEmpty()) {
+            headerMap["Cookie"] = cookie
         }
         val res = when {
             method == RequestMethod.POST -> {
                 if (fieldMap.isNotEmpty()) {
                     HttpHelper
-                        .getApiService<IHttpPostApi>(baseUrl)
+                        .getApiService<HttpPostApi>(baseUrl, charset)
                         .postMapAsync(url, fieldMap, headerMap)
-                        .await()
                 } else {
                     HttpHelper
-                        .getApiService<IHttpPostApi>(baseUrl)
+                        .getApiService<HttpPostApi>(baseUrl, charset)
                         .postBodyAsync(url, body!!, headerMap)
-                        .await()
                 }
             }
             fieldMap.isEmpty() -> HttpHelper
-                .getApiService<IHttpGetApi>(baseUrl)
+                .getApiService<HttpGetApi>(baseUrl, charset)
                 .getAsync(url, headerMap)
-                .await()
             else -> HttpHelper
-                .getApiService<IHttpGetApi>(baseUrl)
+                .getApiService<HttpGetApi>(baseUrl, charset)
                 .getMapAsync(url, fieldMap, headerMap)
-                .await()
         }
         return Res(NetworkUtils.getUrl(res), res.body())
     }

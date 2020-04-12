@@ -6,9 +6,12 @@ import android.graphics.Canvas
 import android.os.Build
 import android.view.View
 import android.view.View.*
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.get
 import io.legado.app.App
 
 
@@ -24,7 +27,7 @@ private tailrec fun getCompatActivity(context: Context?): AppCompatActivity? {
 val View.activity: AppCompatActivity?
     get() = getCompatActivity(context)
 
-inline fun View.hideSoftInput() = run {
+fun View.hideSoftInput() = run {
     val imm = App.INSTANCE.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
     imm?.let {
         imm.hideSoftInputFromWindow(this.windowToken, 0)
@@ -38,15 +41,29 @@ fun View.disableAutoFill() = run {
 }
 
 fun View.gone() {
-    visibility = GONE
+    if (visibility != GONE) {
+        visibility = GONE
+    }
 }
 
 fun View.invisible() {
-    visibility = INVISIBLE
+    if (visibility != INVISIBLE) {
+        visibility = INVISIBLE
+    }
 }
 
 fun View.visible() {
-    visibility = VISIBLE
+    if (visibility != VISIBLE) {
+        visibility = VISIBLE
+    }
+}
+
+fun View.visible(visible: Boolean) {
+    if (visible && visibility != VISIBLE) {
+        visibility = VISIBLE
+    } else if (!visible && visibility == VISIBLE) {
+        visibility = INVISIBLE
+    }
 }
 
 fun View.screenshot(): Bitmap? {
@@ -59,6 +76,35 @@ fun View.screenshot(): Bitmap? {
     }.getOrNull()
 }
 
+fun View.setMargin(left: Int, top: Int, right: Int, bottom: Int) {
+    if (layoutParams is ViewGroup.MarginLayoutParams) {
+        (layoutParams as ViewGroup.MarginLayoutParams).setMargins(left, top, right, bottom)
+        requestLayout()
+    }
+}
+
 fun SeekBar.progressAdd(int: Int) {
     progress += int
+}
+
+fun RadioGroup.getIndexById(id: Int): Int {
+    for (i in 0 until this.childCount) {
+        if (id == get(i).id) {
+            return i
+        }
+    }
+    return 0
+}
+
+fun RadioGroup.getCheckedIndex(): Int {
+    for (i in 0 until this.childCount) {
+        if (checkedRadioButtonId == get(i).id) {
+            return i
+        }
+    }
+    return 0
+}
+
+fun RadioGroup.checkByIndex(index: Int) {
+    check(get(index).id)
 }
