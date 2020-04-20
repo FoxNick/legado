@@ -3,7 +3,7 @@ apply plugin: 'kotlin-android'
 apply plugin: 'kotlin-android-extensions'
 apply plugin: 'kotlin-kapt'
 apply plugin: 'de.timfreiheit.resourceplaceholders'
-apply plugin: 'io.fabric'
+//apply plugin: 'io.fabric'
 
 androidExtensions {
     experimental = true
@@ -117,8 +117,8 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
 
     //fireBase
-    implementation 'com.google.firebase:firebase-core:17.3.0'
-    implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
+    //implementation 'com.google.firebase:firebase-core:17.3.0'
+    //implementation 'com.crashlytics.sdk.android:crashlytics:2.10.1'
 
     //androidX
     implementation 'androidx.core:core-ktx:1.2.0'
@@ -195,4 +195,4 @@ dependencies {
 
 }
 
-apply plugin: 'com.google.gms.google-services'
+//apply plugin: 'com.google.gms.google-services'
