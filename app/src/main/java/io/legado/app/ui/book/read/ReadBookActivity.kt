@@ -85,7 +85,9 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
 
     private val mHandler = Handler()
     private val keepScreenRunnable: Runnable = Runnable { Help.keepScreenOn(window, false) }
-
+    private val autoPageRunnable: Runnable = Runnable { autoPagePlus() }
+    override var autoPageProgress = 0
+    override var isAutoPage = false
     private var screenTimeOut: Long = 0
     private var timeBatteryReceiver: TimeBatteryReceiver? = null
     override val pageFactory: TextPageFactory get() = page_view.pageFactory
@@ -280,6 +282,18 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      */
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         when (keyCode) {
+            getPrefInt(PreferKey.prevKey) -> {
+                if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                    page_view.pageDelegate?.keyTurnPage(PageDelegate.Direction.PREV)
+                    return true
+                }
+            }
+            getPrefInt(PreferKey.nextKey) -> {
+                if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+                    page_view.pageDelegate?.keyTurnPage(PageDelegate.Direction.NEXT)
+                    return true
+                }
+            }
             KeyEvent.KEYCODE_VOLUME_UP -> {
                 if (volumeKeyPage(PageDelegate.Direction.PREV)) {
                     return true
@@ -293,18 +307,6 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
             KeyEvent.KEYCODE_SPACE -> {
                 page_view.pageDelegate?.keyTurnPage(PageDelegate.Direction.NEXT)
                 return true
-            }
-            getPrefInt(PreferKey.prevKey) -> {
-                if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
-                    page_view.pageDelegate?.keyTurnPage(PageDelegate.Direction.PREV)
-                    return true
-                }
-            }
-            getPrefInt(PreferKey.nextKey) -> {
-                if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
-                    page_view.pageDelegate?.keyTurnPage(PageDelegate.Direction.NEXT)
-                    return true
-                }
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -342,6 +344,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                         if (BaseReadAloudService.isPlay()) {
                             ReadAloud.pause(this)
                             toast(R.string.read_aloud_pause)
+                            return true
+                        }
+                        if (isAutoPage) {
+                            autoPageStop()
                             return true
                         }
                     }
@@ -466,6 +472,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 if (getPrefBoolean("volumeKeyPageOnPlay")
                     || BaseReadAloudService.pause
                 ) {
+                    page_view.pageDelegate?.isCancel = false
                     page_view.pageDelegate?.keyTurnPage(direction)
                     return true
                 }
@@ -507,7 +514,7 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
                 } else {
                     tv_chapter_url.gone()
                 }
-                seek_read_page.max = it.pageSize().minus(1)
+                seek_read_page.max = it.pageSize.minus(1)
                 seek_read_page.progress = ReadBook.durPageIndex
                 tv_pre.isEnabled = ReadBook.durChapterIndex != 0
                 tv_next.isEnabled = ReadBook.durChapterIndex != ReadBook.chapterSize - 1
@@ -516,9 +523,10 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
     }
 
     /**
-     * 更新进度条
+     * 页面改变
      */
-    override fun upPageProgress() {
+    override fun pageChanged() {
+        autoPageProgress = 0
         launch {
             seek_read_page.progress = ReadBook.durPageIndex
         }
@@ -557,7 +565,31 @@ class ReadBookActivity : VMBaseActivity<ReadBookViewModel>(R.layout.activity_boo
      * 自动翻页
      */
     override fun autoPage() {
+        if (isAutoPage) {
+            autoPageStop()
+        } else {
+            isAutoPage = true
+            autoPagePlus()
+        }
+        read_menu.setAutoPage(isAutoPage)
+    }
 
+    private fun autoPageStop() {
+        isAutoPage = false
+        mHandler.removeCallbacks(autoPageRunnable)
+        page_view.upContent()
+    }
+
+    private fun autoPagePlus() {
+        mHandler.removeCallbacks(autoPageRunnable)
+        autoPageProgress++
+        if (autoPageProgress >= 460) {
+            autoPageProgress = 0
+            page_view.fillPage(PageDelegate.Direction.NEXT)
+        } else {
+            page_view.invalidate()
+        }
+        mHandler.postDelayed(autoPageRunnable, 100)
     }
 
     /**
