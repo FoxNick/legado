@@ -1,8 +1,12 @@
 package io.legado.app.ui.config
 
+import android.annotation.SuppressLint
 import android.content.SharedPreferences
 import android.os.Build
 import android.os.Bundle
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
@@ -19,7 +23,6 @@ import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.ColorUtils
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.ui.widget.prefs.IconListPreference
-import io.legado.app.ui.widget.prefs.NameListPreference
 import io.legado.app.utils.*
 
 
@@ -34,18 +37,13 @@ class ThemeConfigFragment : PreferenceFragmentCompat(), SharedPreferences.OnShar
                 preferenceScreen.removePreference(it)
             }
         }
-        findPreference<NameListPreference>(PreferKey.themeMode)?.let {
-            it.setOnPreferenceChangeListener { _, _ ->
-                view?.post { App.INSTANCE.applyDayNight() }
-                true
-            }
-        }
         upPreferenceSummary("barElevation", AppConfig.elevation.toString())
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         ATH.applyEdgeEffectColor(listView)
+        setHasOptionsMenu(true)
     }
 
     override fun onResume() {
@@ -56,6 +54,21 @@ class ThemeConfigFragment : PreferenceFragmentCompat(), SharedPreferences.OnShar
     override fun onPause() {
         preferenceManager.sharedPreferences.unregisterOnSharedPreferenceChangeListener(this)
         super.onPause()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.theme_config, menu)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        when (item.itemId) {
+            R.id.menu_theme_mode -> {
+                AppConfig.isNightTheme = !AppConfig.isNightTheme
+                App.INSTANCE.applyDayNight()
+            }
+        }
+        return super.onOptionsItemSelected(item)
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
@@ -115,6 +128,7 @@ class ThemeConfigFragment : PreferenceFragmentCompat(), SharedPreferences.OnShar
 
     }
 
+    @SuppressLint("PrivateResource")
     override fun onPreferenceTreeClick(preference: Preference?): Boolean {
         when (preference?.key) {
             "defaultTheme" -> alert(title = "切换默认主题") {

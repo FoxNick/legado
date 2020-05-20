@@ -1,5 +1,6 @@
 package io.legado.app.ui.rss.article
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.drawable.Drawable
 import com.bumptech.glide.load.DataSource
@@ -18,18 +19,22 @@ import org.jetbrains.anko.sdk27.listeners.onClick
 import org.jetbrains.anko.textColorResource
 
 
-class RssArticlesAdapter(context: Context, val callBack: CallBack) :
-    SimpleRecyclerAdapter<RssArticle>(context, R.layout.item_rss_article) {
+class RssArticlesAdapter(context: Context, layoutId: Int, val callBack: CallBack) :
+    SimpleRecyclerAdapter<RssArticle>(context, layoutId) {
 
+    @SuppressLint("CheckResult")
     override fun convert(holder: ItemViewHolder, item: RssArticle, payloads: MutableList<Any>) {
         with(holder.itemView) {
             tv_title.text = item.title
             tv_pub_date.text = item.pubDate
-            if (item.image.isNullOrBlank()) {
+            if (item.image.isNullOrBlank() && !callBack.isGridLayout) {
                 image_view.gone()
             } else {
-                ImageLoader.load(context, item.image)
-                    .addListener(object : RequestListener<Drawable> {
+                val imageLoader = ImageLoader.load(context, item.image)
+                if (callBack.isGridLayout) {
+                    imageLoader.placeholder(R.drawable.image_rss_article)
+                } else {
+                    imageLoader.addListener(object : RequestListener<Drawable> {
                         override fun onLoadFailed(
                             e: GlideException?,
                             model: Any?,
@@ -52,7 +57,8 @@ class RssArticlesAdapter(context: Context, val callBack: CallBack) :
                         }
 
                     })
-                    .into(image_view)
+                }
+                imageLoader.into(image_view)
             }
             if (item.read) {
                 tv_title.textColorResource = R.color.tv_text_summary
@@ -71,6 +77,7 @@ class RssArticlesAdapter(context: Context, val callBack: CallBack) :
     }
 
     interface CallBack {
+        val isGridLayout: Boolean
         fun readRss(rssArticle: RssArticle)
     }
 }
