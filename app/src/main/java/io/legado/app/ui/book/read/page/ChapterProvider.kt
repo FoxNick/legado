@@ -78,6 +78,7 @@ object ChapterProvider {
             item.title = bookChapter.title
             item.upLinesPosition()
         }
+
         return TextChapter(
             bookChapter.index,
             bookChapter.title,
@@ -270,23 +271,37 @@ object ChapterProvider {
             App.INSTANCE.removePref(PreferKey.readBookFont)
             Typeface.SANS_SERIF
         }
+        // 字体统一处理
+        val bold = Typeface.create(typeface, Typeface.BOLD)
+        val normal = Typeface.create(typeface, Typeface.NORMAL)
+        val (titleFont, textFont) = when (ReadBookConfig.textBold) {
+            1 -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    Pair(Typeface.create(typeface, 900, false), bold)
+                else
+                    Pair(bold, bold)
+            }
+            2 -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    Pair(normal, Typeface.create(typeface, 300, false))
+                else
+                    Pair(normal, normal)
+            }
+            else -> Pair(bold, normal)
+        }
+
         //标题
         titlePaint = TextPaint()
-        titlePaint.color = ReadBookConfig.durConfig.textColor()
+        titlePaint.color = ReadBookConfig.textColor
         titlePaint.letterSpacing = ReadBookConfig.letterSpacing
-        titlePaint.typeface = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            Typeface.create(typeface, if (ReadBookConfig.textBold) 900 else 700, false)
-        } else {
-            Typeface.create(typeface, Typeface.BOLD)
-        }
+        titlePaint.typeface = titleFont
         titlePaint.textSize = with(ReadBookConfig) { textSize + titleSize }.sp.toFloat()
         titlePaint.isAntiAlias = true
         //正文
         contentPaint = TextPaint()
-        contentPaint.color = ReadBookConfig.durConfig.textColor()
+        contentPaint.color = ReadBookConfig.textColor
         contentPaint.letterSpacing = ReadBookConfig.letterSpacing
-        val style = if (ReadBookConfig.textBold) Typeface.BOLD else Typeface.NORMAL
-        contentPaint.typeface = Typeface.create(typeface, style)
+        contentPaint.typeface = textFont
         contentPaint.textSize = ReadBookConfig.textSize.sp.toFloat()
         contentPaint.isAntiAlias = true
         //间距

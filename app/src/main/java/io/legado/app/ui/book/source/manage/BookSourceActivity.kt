@@ -115,6 +115,12 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                 sort = 4
                 initLiveDataBookSource(search_view.query?.toString())
             }
+            R.id.menu_enabled_group -> {
+                search_view.setQuery(getString(R.string.enabled), true)
+            }
+            R.id.menu_disabled_group -> {
+                search_view.setQuery(getString(R.string.disabled), true)
+            }
         }
         if (item.groupId == R.id.source_group) {
             search_view.setQuery(item.title, true)
@@ -166,10 +172,19 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
 
     private fun initLiveDataBookSource(searchKey: String? = null) {
         bookSourceLiveDate?.removeObservers(this)
-        bookSourceLiveDate = if (searchKey.isNullOrEmpty()) {
-            App.db.bookSourceDao().liveDataAll()
-        } else {
-            App.db.bookSourceDao().liveDataSearch("%$searchKey%")
+        bookSourceLiveDate = when {
+            searchKey.isNullOrEmpty() -> {
+                App.db.bookSourceDao().liveDataAll()
+            }
+            searchKey == getString(R.string.enabled) -> {
+                App.db.bookSourceDao().liveDataEnabled()
+            }
+            searchKey == getString(R.string.disabled) -> {
+                App.db.bookSourceDao().liveDataDisabled()
+            }
+            else -> {
+                App.db.bookSourceDao().liveDataSearch("%$searchKey%")
+            }
         }
         bookSourceLiveDate?.observe(this, Observer { data ->
             val sourceList = when (sort) {
@@ -231,11 +246,33 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             R.id.menu_enable_explore -> viewModel.enableSelectExplore(adapter.getSelection())
             R.id.menu_disable_explore -> viewModel.disableSelectExplore(adapter.getSelection())
             R.id.menu_export_selection -> FilePicker.selectFolder(this, exportRequestCode)
-            R.id.menu_check_source -> CheckSource.start(this, adapter.getSelection())
+            R.id.menu_check_source -> checkSource()
             R.id.menu_top_sel -> viewModel.topSource(*adapter.getSelection().toTypedArray())
             R.id.menu_bottom_sel -> viewModel.bottomSource(*adapter.getSelection().toTypedArray())
         }
         return true
+    }
+
+    @SuppressLint("InflateParams")
+    private fun checkSource() {
+        alert(titleResource = R.string.search_book_key) {
+            var editText: AutoCompleteTextView? = null
+            customView {
+                layoutInflater.inflate(R.layout.dialog_edit_text, null).apply {
+                    editText = edit_view
+                    edit_view.setText(CheckSource.keyword)
+                }
+            }
+            okButton {
+                editText?.text?.toString()?.let {
+                    if (it.isNotEmpty()) {
+                        CheckSource.keyword = it
+                    }
+                }
+                CheckSource.start(this@BookSourceActivity, adapter.getSelection())
+            }
+            noButton { }
+        }.show().applyTint()
     }
 
     private fun upGroupMenu() {

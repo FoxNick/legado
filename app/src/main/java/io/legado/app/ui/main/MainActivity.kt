@@ -26,13 +26,14 @@ import io.legado.app.ui.main.rss.RssFragment
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_main.*
+import org.jetbrains.anko.toast
 
 class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     BottomNavigationView.OnNavigationItemSelectedListener,
     ViewPager.OnPageChangeListener by ViewPager.SimpleOnPageChangeListener() {
     override val viewModel: MainViewModel
         get() = getViewModel(MainViewModel::class.java)
-
+    private var exitTime: Long = 0
     private var pagePosition = 0
     private val fragmentId = arrayOf(0, 1, 2, 3)
     private val fragmentMap = mapOf<Int, Fragment>(
@@ -104,10 +105,17 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
                         view_pager_main.currentItem = 0
                         return true
                     }
-                    if (!BaseReadAloudService.pause) {
-                        moveTaskToBack(true)
-                        return true
+                    if (System.currentTimeMillis() - exitTime > 2000) {
+                        toast(R.string.double_click_exit)
+                        exitTime = System.currentTimeMillis()
+                    } else {
+                        if (BaseReadAloudService.pause) {
+                            finish()
+                        } else {
+                            moveTaskToBack(true)
+                        }
                     }
+                    return true
                 }
             }
         }
