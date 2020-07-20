@@ -9,7 +9,7 @@ import io.legado.app.App
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.ui.book.read.page.ChapterProvider
+import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.utils.*
 import java.io.File
 
@@ -90,6 +90,7 @@ object ReadBookConfig {
                 }
             }
         }
+        isScroll = pageAnim == 3
     }
 
     fun save() {
@@ -136,17 +137,16 @@ object ReadBookConfig {
                 App.INSTANCE.putPrefBoolean(PreferKey.shareLayout, value)
             }
         }
-    var pageAnim = App.INSTANCE.getPrefInt(PreferKey.pageAnim)
+    var pageAnim: Int
+        get() = if (AppConfig.isEInkMode) -1 else App.INSTANCE.getPrefInt(PreferKey.pageAnim)
         set(value) {
-            field = value
-            isScroll = value == 3
-            if (App.INSTANCE.getPrefInt(PreferKey.pageAnim) != value) {
-                App.INSTANCE.putPrefInt(PreferKey.pageAnim, value)
-            }
+            App.INSTANCE.putPrefInt(PreferKey.pageAnim, value)
+            isScroll = pageAnim == 3
         }
     var isScroll = pageAnim == 3
     val clickTurnPage get() = App.INSTANCE.getPrefBoolean(PreferKey.clickTurnPage, true)
     val textFullJustify get() = App.INSTANCE.getPrefBoolean(PreferKey.textFullJustify, true)
+    val textBottomJustify get() = App.INSTANCE.getPrefBoolean(PreferKey.textBottomJustify, true)
     var bodyIndentCount = App.INSTANCE.getPrefInt(PreferKey.bodyIndent, 2)
         set(value) {
             field = value

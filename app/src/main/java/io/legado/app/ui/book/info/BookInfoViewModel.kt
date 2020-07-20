@@ -10,7 +10,6 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.BookHelp
 import io.legado.app.model.WebBook
-import io.legado.app.model.localBook.AnalyzeTxtFile
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.service.help.ReadBook
 import kotlinx.coroutines.Dispatchers.IO
@@ -82,7 +81,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
     ) {
         execute {
             if (book.isLocalBook()) {
-                AnalyzeTxtFile().analyze(context, book).let {
+                LocalBook.getChapterList(book).let {
                     App.db.bookDao().update(book)
                     App.db.bookChapterDao().insert(*it.toTypedArray())
                     chapterListData.postValue(it)
@@ -132,21 +131,16 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun changeTo(book: Book) {
+    fun changeTo(newBook: Book) {
         execute {
             if (inBookshelf) {
-                bookData.value?.let {
-                    book.group = it.group
-                    book.order = it.order
-                    App.db.bookDao().delete(it)
-                }
-                App.db.bookDao().insert(book)
+                bookData.value?.changeTo(newBook)
             }
-            bookData.postValue(book)
-            if (book.tocUrl.isEmpty()) {
-                loadBookInfo(book) { upChangeDurChapterIndex(book, it) }
+            bookData.postValue(newBook)
+            if (newBook.tocUrl.isEmpty()) {
+                loadBookInfo(newBook) { upChangeDurChapterIndex(newBook, it) }
             } else {
-                loadChapter(book) { upChangeDurChapterIndex(book, it) }
+                loadChapter(newBook) { upChangeDurChapterIndex(newBook, it) }
             }
         }
     }
@@ -222,7 +216,7 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
     fun delBook(deleteOriginal: Boolean = false, success: (() -> Unit)? = null) {
         execute {
             bookData.value?.let {
-                App.db.bookDao().delete(it)
+                it.delete()
                 inBookshelf = false
                 if (it.isLocalBook()) {
                     LocalBook.deleteBook(it, deleteOriginal)
@@ -230,6 +224,14 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             }
         }.onSuccess {
             success?.invoke()
+        }
+    }
+
+    fun upEditBook() {
+        bookData.value?.let {
+            App.db.bookDao().getBook(it.bookUrl)?.let { book ->
+                bookData.postValue(book)
+            }
         }
     }
 }
