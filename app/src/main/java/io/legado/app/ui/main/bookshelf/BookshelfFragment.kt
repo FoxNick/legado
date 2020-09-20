@@ -2,16 +2,12 @@ package io.legado.app.ui.main.bookshelf
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.Menu
-import android.view.MenuItem
-import android.view.View
+import android.view.*
 import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import androidx.fragment.app.FragmentStatePagerAdapter
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.Observer
 import com.google.android.material.tabs.TabLayout
 import io.legado.app.App
 import io.legado.app.R
@@ -27,7 +23,7 @@ import io.legado.app.lib.dialogs.okButton
 import io.legado.app.lib.theme.ATH
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.book.arrange.ArrangeBookActivity
-import io.legado.app.ui.book.download.DownloadActivity
+import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.ui.book.group.GroupManageDialog
 import io.legado.app.ui.book.local.ImportBookActivity
 import io.legado.app.ui.book.search.SearchActivity
@@ -79,7 +75,7 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
                 val group = bookGroups[tab_layout.selectedTabPosition]
                 val fragment = fragmentMap[group.groupId]
                 fragment?.getBooks()?.let {
-                    activityViewModel.upChapterList(it)
+                    activityViewModel.upToc(it)
                 }
             }
             R.id.menu_bookshelf_layout -> configBookshelf()
@@ -88,18 +84,18 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
             R.id.menu_add_local -> startActivity<ImportBookActivity>()
             R.id.menu_add_url -> addBookByUrl()
             R.id.menu_arrange_bookshelf -> startActivity<ArrangeBookActivity>(
-                Pair("groupId", selectedGroup.groupId),
-                Pair("groupName", selectedGroup.groupName)
+                Pair("groupId", selectedGroup?.groupId ?: 0),
+                Pair("groupName", selectedGroup?.groupName ?: 0)
             )
-            R.id.menu_download -> startActivity<DownloadActivity>(
-                Pair("groupId", selectedGroup.groupId),
-                Pair("groupName", selectedGroup.groupName)
+            R.id.menu_download -> startActivity<CacheActivity>(
+                Pair("groupId", selectedGroup?.groupId ?: 0),
+                Pair("groupName", selectedGroup?.groupName ?: 0)
             )
         }
     }
 
-    private val selectedGroup: BookGroup
-        get() = bookGroups[view_pager_bookshelf.currentItem]
+    private val selectedGroup: BookGroup?
+        get() = bookGroups.getOrNull(view_pager_bookshelf?.currentItem ?: 0)
 
     private fun initView() {
         ATH.applyEdgeEffectColor(view_pager_bookshelf)
@@ -114,7 +110,7 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
     private fun initBookGroupData() {
         bookGroupLiveData?.removeObservers(viewLifecycleOwner)
         bookGroupLiveData = App.db.bookGroupDao().liveDataAll()
-        bookGroupLiveData?.observe(viewLifecycleOwner, Observer {
+        bookGroupLiveData?.observe(viewLifecycleOwner, {
             viewModel.checkGroup(it)
             launch {
                 synchronized(this) {
@@ -152,7 +148,7 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
         })
         noGroupLiveData?.removeObservers(viewLifecycleOwner)
         noGroupLiveData = App.db.bookDao().observeNoGroupSize()
-        noGroupLiveData?.observe(viewLifecycleOwner, Observer {
+        noGroupLiveData?.observe(viewLifecycleOwner, {
             if (it > 0 && !showGroupNone && AppConfig.bookGroupNoneShow) {
                 showGroupNone = true
                 upGroup()
@@ -267,10 +263,10 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
     }
 
     fun gotoTop() {
-        fragmentMap[selectedGroup.groupId]?.gotoTop()
+        fragmentMap[selectedGroup?.groupId]?.gotoTop()
     }
 
-    private inner class TabFragmentPageAdapter internal constructor(fm: FragmentManager) :
+    private inner class TabFragmentPageAdapter(fm: FragmentManager) :
         FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
         override fun getPageTitle(position: Int): CharSequence? {
@@ -293,6 +289,15 @@ class BookshelfFragment : VMBaseFragment<BookshelfViewModel>(R.layout.fragment_b
 
         override fun getCount(): Int {
             return bookGroups.size
+        }
+
+        override fun instantiateItem(container: ViewGroup, position: Int): Any {
+            val fragment = super.instantiateItem(container, position) as BooksFragment
+            val group = bookGroups[position]
+            if (!fragmentMap.containsKey(group.groupId)) {
+                fragmentMap[group.groupId] = fragment
+            }
+            return fragment
         }
 
     }
