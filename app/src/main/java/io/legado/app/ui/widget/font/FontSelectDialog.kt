@@ -4,7 +4,6 @@ import android.app.Activity.RESULT_OK
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
@@ -43,8 +42,7 @@ class FontSelectDialog : BaseDialogFragment(),
 
     override fun onStart() {
         super.onStart()
-        val dm = DisplayMetrics()
-        activity?.windowManager?.defaultDisplay?.getMetrics(dm)
+        val dm = requireActivity().getSize()
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -87,7 +85,7 @@ class FontSelectDialog : BaseDialogFragment(),
         when (item?.itemId) {
             R.id.menu_default -> {
                 val requireContext = requireContext()
-                requireContext.alert(titleResource = R.string.system_typeface) {
+                alert(titleResource = R.string.system_typeface) {
                     items(
                         requireContext.resources.getStringArray(R.array.system_typefaces).toList()
                     ) { _, i ->

@@ -3,6 +3,7 @@ package io.legado.app.ui.book.changesource
 import android.app.Application
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import androidx.lifecycle.MutableLiveData
 import io.legado.app.App
 import io.legado.app.R
@@ -27,7 +28,7 @@ import kotlin.math.min
 class ChangeSourceViewModel(application: Application) : BaseViewModel(application) {
     private val threadCount = AppConfig.threadCount
     private var searchPool: ExecutorCoroutineDispatcher? = null
-    val handler = Handler()
+    val handler = Handler(Looper.getMainLooper())
     val searchStateData = MutableLiveData<Boolean>()
     val searchBooksLiveData = MutableLiveData<List<SearchBook>>()
     var name: String = ""
@@ -120,11 +121,11 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
                 .onSuccess(IO) {
                     it.forEach { searchBook ->
                         if (searchBook.name == name && searchBook.author == author) {
-                            if (context.getPrefBoolean(PreferKey.changeSourceLoadToc)) {
-                                if (searchBook.tocUrl.isEmpty()) {
+                            if (searchBook.latestChapterTitle.isNullOrEmpty()) {
+                                if (context.getPrefBoolean(PreferKey.changeSourceLoadInfo) || context.getPrefBoolean(PreferKey.changeSourceLoadToc)) {
                                     loadBookInfo(searchBook.toBook())
                                 } else {
-                                    loadChapter(searchBook.toBook())
+                                    searchFinish(searchBook)
                                 }
                             } else {
                                 searchFinish(searchBook)
@@ -156,7 +157,14 @@ class ChangeSourceViewModel(application: Application) : BaseViewModel(applicatio
             App.db.bookSourceDao().getBookSource(book.origin)?.let { bookSource ->
                 WebBook(bookSource).getBookInfo(book, this)
                     .onSuccess {
-                        loadChapter(it)
+                        if (context.getPrefBoolean(PreferKey.changeSourceLoadToc)) {
+                            loadChapter(it)
+                        } else {
+                            //从详情页里获取最新章节
+                            book.latestChapterTitle = it.latestChapterTitle
+                            val searchBook = book.toSearchBook()
+                            searchFinish(searchBook)
+                        }
                     }.onError {
                         debug { context.getString(R.string.error_get_book_info) }
                     }

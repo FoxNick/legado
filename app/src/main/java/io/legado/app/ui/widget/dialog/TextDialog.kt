@@ -1,17 +1,18 @@
 package io.legado.app.ui.widget.dialog
 
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.FragmentManager
 import io.legado.app.R
 import io.legado.app.base.BaseDialogFragment
+import io.legado.app.utils.getSize
+import io.noties.markwon.Markwon
+import io.noties.markwon.image.glide.GlideImagesPlugin
 import kotlinx.android.synthetic.main.dialog_text_view.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import ru.noties.markwon.Markwon
 
 
 class TextDialog : BaseDialogFragment() {
@@ -45,8 +46,7 @@ class TextDialog : BaseDialogFragment() {
 
     override fun onStart() {
         super.onStart()
-        val dm = DisplayMetrics()
-        activity?.windowManager?.defaultDisplay?.getMetrics(dm)
+        val dm = requireActivity().getSize()
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -63,11 +63,10 @@ class TextDialog : BaseDialogFragment() {
             val content = it.getString("content") ?: ""
             when (it.getInt("mode")) {
                 MD -> text_view.post {
-                    Markwon.create(requireContext())
-                        .setMarkdown(
-                            text_view,
-                            content
-                        )
+                    Markwon.builder(requireContext())
+                        .usePlugin(GlideImagesPlugin.create(requireContext()))
+                        .build()
+                        .setMarkdown(text_view, content)
                 }
                 else -> text_view.text = content
             }

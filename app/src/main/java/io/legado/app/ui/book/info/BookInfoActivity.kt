@@ -28,12 +28,12 @@ import io.legado.app.lib.theme.getPrimaryTextColor
 import io.legado.app.ui.audio.AudioPlayActivity
 import io.legado.app.ui.book.changecover.ChangeCoverDialog
 import io.legado.app.ui.book.changesource.ChangeSourceDialog
-import io.legado.app.ui.book.chapterlist.ChapterListActivity
 import io.legado.app.ui.book.group.GroupSelectDialog
 import io.legado.app.ui.book.info.edit.BookInfoEditActivity
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.book.search.SearchActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
+import io.legado.app.ui.book.toc.ChapterListActivity
 import io.legado.app.ui.widget.image.CoverImageView
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.activity_book_info.*
@@ -90,6 +90,13 @@ class BookInfoActivity :
                     toast(R.string.after_add_bookshelf)
                 }
             }
+            R.id.menu_share_it -> {
+                viewModel.bookData.value?.let {
+                    val bookJson = GSON.toJson(it)
+                    val shareStr = "${it.bookUrl}#$bookJson"
+                    shareWithQr(it.name, shareStr)
+                }
+            }
             R.id.menu_refresh -> {
                 upLoading(true)
                 viewModel.bookData.value?.let {
@@ -114,8 +121,8 @@ class BookInfoActivity :
         return super.onCompatOptionsItemSelected(item)
     }
 
-    override fun onMenuOpened(featureId: Int, menu: Menu?): Boolean {
-        menu?.findItem(R.id.menu_can_update)?.isChecked =
+    override fun onMenuOpened(featureId: Int, menu: Menu): Boolean {
+        menu.findItem(R.id.menu_can_update)?.isChecked =
             viewModel.bookData.value?.canUpdate ?: true
         return super.onMenuOpened(featureId, menu)
     }
@@ -182,7 +189,7 @@ class BookInfoActivity :
         }
     }
 
-    private fun upGroup(groupId: Int) {
+    private fun upGroup(groupId: Long) {
         viewModel.loadGroup(groupId) {
             if (it.isNullOrEmpty()) {
                 tv_group.text = getString(R.string.group_s, getString(R.string.no_group))
@@ -350,7 +357,7 @@ class BookInfoActivity :
         return viewModel.durChapterIndex
     }
 
-    override fun upGroup(requestCode: Int, groupId: Int) {
+    override fun upGroup(requestCode: Int, groupId: Long) {
         upGroup(groupId)
         viewModel.bookData.value?.group = groupId
         if (viewModel.inBookshelf) {

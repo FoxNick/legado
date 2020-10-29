@@ -16,6 +16,7 @@ import androidx.lifecycle.LiveData
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.google.android.material.snackbar.Snackbar
 import io.legado.app.App
 import io.legado.app.BuildConfig
 import io.legado.app.R
@@ -65,12 +66,7 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
     private var groupMenu: SubMenu? = null
     private var sort = 0
     private var sortAscending = 0
-
-    private val progressDialogBuilder by lazy {
-        progressDialog("校验书源") {
-            setCancelable(false)
-        }
-    }
+    private var snackBar: Snackbar? = null
 
     override fun onActivityCreated(savedInstanceState: Bundle?) {
         initRecyclerView()
@@ -103,11 +99,20 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
                     val intent = Intent(Intent.ACTION_SEND)
                     val file = FileUtils.createFileWithReplace("$filesDir/shareBookSource.json")
                     file.writeText(json)
-                    val fileUri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".fileProvider", file)
+                    val fileUri = FileProvider.getUriForFile(
+                        this,
+                        BuildConfig.APPLICATION_ID + ".fileProvider",
+                        file
+                    )
                     intent.type = "text/*"
                     intent.putExtra(Intent.EXTRA_STREAM, fileUri)
                     intent.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    startActivity(Intent.createChooser(intent, getString(R.string.share_selected_source)))
+                    startActivity(
+                        Intent.createChooser(
+                            intent,
+                            getString(R.string.share_selected_source)
+                        )
+                    )
                 } catch (e: ActivityNotFoundException) {
                     e.printStackTrace()
                 }
@@ -161,15 +166,13 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         recycler_view.addItemDecoration(VerticalDivider(this))
         adapter = BookSourceAdapter(this, this)
         recycler_view.adapter = adapter
-        val itemTouchCallback = ItemTouchCallback()
-        itemTouchCallback.onItemTouchCallbackListener = adapter
+        val itemTouchCallback = ItemTouchCallback(adapter)
         itemTouchCallback.isCanDrag = true
         val dragSelectTouchHelper: DragSelectTouchHelper =
             DragSelectTouchHelper(adapter.initDragSelectTouchHelperCallback()).setSlideArea(16, 50)
         dragSelectTouchHelper.attachToRecyclerView(recycler_view)
         // When this page is opened, it is in selection mode
         dragSelectTouchHelper.activeSlideSelect()
-
         // Note: need judge selection first, so add ItemTouchHelper after it.
         ItemTouchHelper(itemTouchCallback).attachToRecyclerView(recycler_view)
     }
@@ -199,19 +202,19 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             }
         }
         bookSourceLiveDate?.observe(this, { data ->
-            val sourceList = when (sortAscending % 2){
+            val sourceList = when (sortAscending % 2) {
                 0 -> when (sort) {
                     1 -> data.sortedBy { it.weight }
                     2 -> data.sortedBy { it.bookSourceName }
                     3 -> data.sortedBy { it.bookSourceUrl }
-                    4 -> data.sortedByDescending { it.lastUpdateTime}
+                    4 -> data.sortedByDescending { it.lastUpdateTime }
                     else -> data
                 }
                 else -> when (sort) {
                     1 -> data.sortedByDescending { it.weight }
                     2 -> data.sortedByDescending { it.bookSourceName }
                     3 -> data.sortedByDescending { it.bookSourceUrl }
-                    4 -> data.sortedBy { it.lastUpdateTime}
+                    4 -> data.sortedBy { it.lastUpdateTime }
                     else -> data.reversed()
                 }
             }
@@ -221,11 +224,11 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             upCountView()
         })
     }
-    private fun sortCheck (sortId: Int){
-        if (sort == sortId){
-            sortAscending +=1
-        }
-        else{
+
+    private fun sortCheck(sortId: Int) {
+        if (sort == sortId) {
+            sortAscending += 1
+        } else {
             sortAscending = 0
             sort = sortId
         }
@@ -268,30 +271,6 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             }
         })
 
-    }
-
-    override fun observeLiveBus() {
-        observeEvent<Int>(EventBus.CHECK_INIT) { max->
-            progressDialogBuilder.max = max
-            progressDialogBuilder.show()
-        }
-        observeEvent<Int>(EventBus.CHECK_UP_PROGRESS) { progress->
-            progressDialogBuilder.progress = progress
-        }
-        observeEvent<Int>(EventBus.CHECK_DONE) {
-            if (progressDialogBuilder.isShowing) {
-                progressDialogBuilder.progress = it
-                progressDialogBuilder.max = it
-                progressDialogBuilder.dismiss()
-            }
-            toast("校验完成！")
-            groups.map { group->
-                if (group.contains("失效")) {
-                    search_view.setQuery("失效", true)
-                    toast("发现有失效书源，已为您自动筛选！")
-                }
-            }
-        }
     }
 
     override fun onMenuItemClick(item: MenuItem?): Boolean {
@@ -415,6 +394,30 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
         }.show().applyTint()
     }
 
+    override fun observeLiveBus() {
+        observeEvent<String>(EventBus.CHECK_SOURCE) { msg ->
+            snackBar?.setText(msg) ?: let {
+                snackBar = Snackbar
+                    .make(root_view, msg, Snackbar.LENGTH_INDEFINITE)
+                    .setAction(R.string.cancel) {
+                        CheckSource.stop(this)
+                    }.apply { show() }
+            }
+        }
+        observeEvent<Int>(EventBus.CHECK_SOURCE_DONE) {
+            snackBar?.let {
+                it.dismiss()
+                snackBar = null
+            }
+            groups.map { group ->
+                if (group.contains("失效")) {
+                    search_view.setQuery("失效", true)
+                    toast("发现有失效书源，已为您自动筛选！")
+                }
+            }
+        }
+    }
+
     override fun upCountView() {
         select_action_bar.upCountView(adapter.getSelection().size, adapter.getActualItemCount())
     }
@@ -509,4 +512,5 @@ class BookSourceActivity : VMBaseActivity<BookSourceViewModel>(R.layout.activity
             search_view.setQuery("", true)
         }
     }
+
 }

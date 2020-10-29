@@ -11,6 +11,7 @@ import io.legado.app.base.BaseActivity
 import io.legado.app.constant.AppConst.timeFormat
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ReadTipConfig
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.widget.BatteryView
@@ -29,11 +30,14 @@ class ContentView(context: Context) : FrameLayout(context) {
     private var tvPage: BatteryView? = null
     private var tvTotalProgress: BatteryView? = null
     private var tvPageAndTotal: BatteryView? = null
+    private var tvBookName: BatteryView? = null
 
     val headerHeight: Int
-        get() = if (ReadBookConfig.hideStatusBar) {
-            if (ll_header.isGone) 0 else ll_header.height
-        } else context.statusBarHeight
+        get() {
+            val h1 = if (ReadBookConfig.hideStatusBar) 0 else context.statusBarHeight
+            val h2 = if (ll_header.isGone) 0 else ll_header.height
+            return h1 + h2
+        }
 
     init {
         //设置背景防止切换背景时文字重叠
@@ -185,6 +189,19 @@ class ContentView(context: Context) : FrameLayout(context) {
             isBattery = false
             textSize = 12f
         }
+        tvBookName = when (ReadTipConfig.bookName) {
+            ReadTipConfig.tipHeaderLeft -> bv_header_left
+            ReadTipConfig.tipHeaderMiddle -> tv_header_middle
+            ReadTipConfig.tipHeaderRight -> tv_header_right
+            ReadTipConfig.tipFooterLeft -> bv_footer_left
+            ReadTipConfig.tipFooterMiddle -> tv_footer_middle
+            ReadTipConfig.tipFooterRight -> tv_footer_right
+            else -> null
+        }
+        tvBookName?.apply {
+            isBattery = false
+            textSize = 12f
+        }
     }
 
     fun setBg(bg: Drawable?) {
@@ -213,8 +230,8 @@ class ContentView(context: Context) : FrameLayout(context) {
 
     @SuppressLint("SetTextI18n")
     fun setProgress(textPage: TextPage) = textPage.apply {
-        val title = textPage.title
-        tvTitle?.text = title
+        tvBookName?.text = ReadBook.book?.name
+        tvTitle?.text = textPage.title
         tvPage?.text = "${index.plus(1)}/$pageSize"
         tvTotalProgress?.text = readProgress
         tvPageAndTotal?.text = "${index.plus(1)}/$pageSize  $readProgress"

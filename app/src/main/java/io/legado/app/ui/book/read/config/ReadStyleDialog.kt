@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read.config
 import android.annotation.SuppressLint
 import android.content.DialogInterface
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.view.*
 import androidx.core.view.get
 import io.legado.app.R
@@ -17,6 +16,7 @@ import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getPrimaryTextColor
+import io.legado.app.service.help.ReadBook
 import io.legado.app.ui.book.read.ReadBookActivity
 import io.legado.app.ui.widget.font.FontSelectDialog
 import io.legado.app.utils.*
@@ -35,10 +35,6 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
 
     override fun onStart() {
         super.onStart()
-        val dm = DisplayMetrics()
-        activity?.let {
-            it.windowManager?.defaultDisplay?.getMetrics(dm)
-        }
         dialog?.window?.let {
             it.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             it.setBackgroundDrawableResource(R.color.background)
@@ -104,12 +100,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
 
     private fun initData() {
         cb_share_layout.isChecked = ReadBookConfig.shareLayout
-        ReadBookConfig.pageAnim.let {
-            if (it >= 0 && it < rg_page_anim.childCount) {
-                rg_page_anim.check(rg_page_anim[it].id)
-            }
-        }
-        upStyle()
+        upView()
         styleAdapter.setItems(ReadBookConfig.configList)
     }
 
@@ -131,7 +122,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
                 title = getString(R.string.text_indent),
                 items = resources.getStringArray(R.array.indent).toList()
             ) { _, index ->
-                ReadBookConfig.bodyIndentCount = index
+                ReadBookConfig.paragraphIndent = "　".repeat(index)
                 postEvent(EventBus.UP_CONFIG, true)
             }
         }
@@ -143,13 +134,14 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
             TipConfigDialog().show(childFragmentManager, "tipConfigDialog")
         }
         rg_page_anim.onCheckedChange { _, checkedId ->
+            ReadBook.book?.setPageAnim(-1)
             ReadBookConfig.pageAnim = rg_page_anim.getIndexById(checkedId)
             callBack?.page_view?.upPageAnim()
         }
         cb_share_layout.onCheckedChangeListener = { checkBox, isChecked ->
             if (checkBox.isPressed) {
                 ReadBookConfig.shareLayout = isChecked
-                upStyle()
+                upView()
                 postEvent(EventBus.UP_CONFIG, true)
             }
         }
@@ -173,7 +165,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
 
     @SuppressLint("InflateParams")
     private fun showTitleConfig() = ReadBookConfig.apply {
-        requireContext().alert(R.string.title) {
+        alert(R.string.title) {
             val rootView = LayoutInflater.from(requireContext())
                 .inflate(R.layout.dialog_title_config, null).apply {
                     rg_title_mode.checkByIndex(titleMode)
@@ -206,7 +198,7 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
         if (index != oldIndex) {
             ReadBookConfig.styleSelect = index
             ReadBookConfig.upBg()
-            upStyle()
+            upView()
             styleAdapter.notifyItemChanged(oldIndex)
             styleAdapter.notifyItemChanged(index)
             postEvent(EventBus.UP_CONFIG, true)
@@ -220,7 +212,12 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
         return true
     }
 
-    private fun upStyle() {
+    private fun upView() {
+        ReadBook.pageAnim().let {
+            if (it >= 0 && it < rg_page_anim.childCount) {
+                rg_page_anim.check(rg_page_anim[it].id)
+            }
+        }
         ReadBookConfig.let {
             dsb_text_size.progress = it.textSize - 5
             dsb_text_letter_spacing.progress = (it.letterSpacing * 100).toInt() + 50
@@ -248,13 +245,14 @@ class ReadStyleDialog : BaseDialogFragment(), FontSelectDialog.CallBack {
             payloads: MutableList<Any>
         ) {
             holder.itemView.apply {
-                iv_style.setTextColor(item.textColor())
-                iv_style.setImageDrawable(item.bgDrawable(100, 150))
+                iv_style.setText(item.name.ifBlank { "文字" })
+                iv_style.setTextColor(item.curTextColor())
+                iv_style.setImageDrawable(item.curBgDrawable(100, 150))
                 if (ReadBookConfig.styleSelect == holder.layoutPosition) {
                     iv_style.borderColor = accentColor
                     iv_style.setTextBold(true)
                 } else {
-                    iv_style.borderColor = item.textColor()
+                    iv_style.borderColor = item.curTextColor()
                     iv_style.setTextBold(false)
                 }
             }

@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import io.legado.app.App
 import io.legado.app.constant.PreferKey
+import io.legado.app.help.DefaultData
 import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
@@ -31,9 +32,9 @@ object Backup {
             "rssSource.json",
             "rssStar.json",
             "replaceRule.json",
-            "txtTocRule.json",
             "readRecord.json",
-            "httpTTS.json",
+            DefaultData.txtTocRuleFileName,
+            DefaultData.httpTtsFileName,
             ReadBookConfig.configFileName,
             ReadBookConfig.shareConfigFileName,
             ThemeConfig.configFileName,
@@ -54,6 +55,7 @@ object Backup {
         context.putPrefLong(PreferKey.lastBackup, System.currentTimeMillis())
         withContext(IO) {
             synchronized(this@Backup) {
+                FileUtils.deleteFile(backupPath)
                 writeListToJson(App.db.bookDao().all, "bookshelf.json", backupPath)
                 writeListToJson(App.db.bookmarkDao().all, "bookmark.json", backupPath)
                 writeListToJson(App.db.bookGroupDao().all, "bookGroup.json", backupPath)
@@ -61,9 +63,9 @@ object Backup {
                 writeListToJson(App.db.rssSourceDao().all, "rssSource.json", backupPath)
                 writeListToJson(App.db.rssStarDao().all, "rssStar.json", backupPath)
                 writeListToJson(App.db.replaceRuleDao().all, "replaceRule.json", backupPath)
-                writeListToJson(App.db.txtTocRule().all, "txtTocRule.json", backupPath)
                 writeListToJson(App.db.readRecordDao().all, "readRecord.json", backupPath)
-                writeListToJson(App.db.httpTTSDao().all, "httpTTS.json", backupPath)
+                writeListToJson(App.db.txtTocRule().all, DefaultData.txtTocRuleFileName, backupPath)
+                writeListToJson(App.db.httpTTSDao().all, DefaultData.httpTtsFileName, backupPath)
                 GSON.toJson(ReadBookConfig.configList).let {
                     FileUtils.createFileIfNotExist(backupPath + File.separator + ReadBookConfig.configFileName)
                         .writeText(it)

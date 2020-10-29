@@ -8,19 +8,23 @@ import io.legado.app.constant.EventBus
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.RssSource
 import io.legado.app.help.AppConfig
-import io.legado.app.help.DefaultValueHelp
+import io.legado.app.help.BookHelp
+import io.legado.app.help.DefaultData
 import io.legado.app.help.http.HttpHelper
 import io.legado.app.help.storage.Restore
 import io.legado.app.model.webBook.WebBook
+import io.legado.app.service.help.CacheBook
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.postEvent
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.Executors
+import kotlin.math.min
 
 class MainViewModel(application: Application) : BaseViewModel(application) {
     private var threadCount = AppConfig.threadCount
@@ -74,12 +78,14 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                         postEvent(EventBus.UP_BOOK, book.bookUrl)
                     }
                     App.db.bookSourceDao().getBookSource(book.origin)?.let { bookSource ->
-                        WebBook(bookSource).getChapterList(book, context = upTocPool)
+                        val webBook = WebBook(bookSource)
+                        webBook.getChapterList(book, context = upTocPool)
                             .timeout(300000)
                             .onSuccess(IO) {
                                 App.db.bookDao().update(book)
                                 App.db.bookChapterDao().delByBook(book.bookUrl)
                                 App.db.bookChapterDao().insert(*it.toTypedArray())
+                                cacheBook(webBook, book)
                             }
                             .onError {
                                 it.printStackTrace()
@@ -99,6 +105,29 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
                         upNext()
                     }
                     return
+                }
+            }
+        }
+    }
+
+    private fun cacheBook(webBook: WebBook, book: Book) {
+        execute {
+            if (book.totalChapterNum > book.durChapterIndex) {
+                val downloadToIndex = min(book.totalChapterNum, book.durChapterIndex.plus(10))
+                for (i in book.durChapterIndex until downloadToIndex) {
+                    App.db.bookChapterDao().getChapter(book.bookUrl, i)?.let { chapter ->
+                        if (!BookHelp.hasContent(book, chapter)) {
+                            var addToCache = false
+                            while (!addToCache) {
+                                if (CacheBook.downloadCount() < 5) {
+                                    CacheBook.download(webBook, book, chapter)
+                                    addToCache = true
+                                } else {
+                                    delay(1000)
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -133,7 +162,9 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         execute {
             FileUtils.deleteFile(FileUtils.getPath(context.cacheDir, "Fonts"))
             if (App.db.httpTTSDao().count == 0) {
-                DefaultValueHelp.initHttpTTS()
+                DefaultData.defaultHttpTTS.let {
+                    App.db.httpTTSDao().insert(*it.toTypedArray())
+                }
             }
         }
     }

@@ -1,10 +1,8 @@
 package io.legado.app.service.help
 
-import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import com.hankcs.hanlp.HanLP
 import io.legado.app.App
-import io.legado.app.R
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
@@ -13,6 +11,7 @@ import io.legado.app.data.entities.ReadRecord
 import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.IntentDataHelp
+import io.legado.app.help.ReadBookConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.service.BaseReadAloudService
@@ -59,8 +58,12 @@ object ReadBook {
         curTextChapter = null
         nextTextChapter = null
         titleDate.postValue(book.name)
+        callBack?.upPageAnim()
         upWebBook(book)
         ImageProvider.clearAllCache()
+        synchronized(this) {
+            loadingChapters.clear()
+        }
     }
 
     fun upWebBook(book: Book) {
@@ -270,35 +273,7 @@ object ReadBook {
         val book = book
         val webBook = webBook
         if (book != null && webBook != null) {
-            webBook.getContent(book, chapter)
-                .onSuccess(Dispatchers.IO) { content ->
-                    if (content.isEmpty()) {
-                        contentLoadFinish(
-                            book,
-                            chapter,
-                            App.INSTANCE.getString(R.string.content_empty),
-                            resetPageOffset = resetPageOffset
-                        )
-                        removeLoading(chapter.index)
-                    } else {
-                        BookHelp.saveContent(book, chapter, content)
-                        contentLoadFinish(
-                            book,
-                            chapter,
-                            content,
-                            resetPageOffset = resetPageOffset
-                        )
-                        removeLoading(chapter.index)
-                    }
-                }.onError {
-                    contentLoadFinish(
-                        book,
-                        chapter,
-                        it.localizedMessage ?: "未知错误",
-                        resetPageOffset = resetPageOffset
-                    )
-                    removeLoading(chapter.index)
-                }
+            CacheBook.download(webBook, book, chapter)
         } else if (book != null) {
             contentLoadFinish(
                 book,
@@ -320,31 +295,34 @@ object ReadBook {
         }
     }
 
-    private fun removeLoading(index: Int) {
+    fun removeLoading(index: Int) {
         synchronized(this) {
             loadingChapters.remove(index)
         }
     }
 
-    fun searchResultPositions(pages: List<TextPage>, indexWithinChapter: Int, query: String): Array<Int>{
-        //
+    fun searchResultPositions(
+        pages: List<TextPage>,
+        indexWithinChapter: Int,
+        query: String
+    ): Array<Int> {
         // calculate search result's pageIndex
         var content = ""
-        pages.map{
-            content+= it.text
+        pages.map {
+            content += it.text
         }
         var count = 1
         var index = content.indexOf(query)
-        while(count != indexWithinChapter){
-            index = content.indexOf(query, index + 1);
+        while (count != indexWithinChapter) {
+            index = content.indexOf(query, index + 1)
             count += 1
         }
         val contentPosition = index
         var pageIndex = 0
         var length = pages[pageIndex].text.length
-        while (length < contentPosition){
+        while (length < contentPosition) {
             pageIndex += 1
-            if (pageIndex >pages.size){
+            if (pageIndex > pages.size) {
                 pageIndex = pages.size
                 break
             }
@@ -355,9 +333,9 @@ object ReadBook {
         val currentPage = pages[pageIndex]
         var lineIndex = 0
         length = length - currentPage.text.length + currentPage.textLines[lineIndex].text.length
-        while (length < contentPosition){
+        while (length < contentPosition) {
             lineIndex += 1
-            if (lineIndex >currentPage.textLines.size){
+            if (lineIndex > currentPage.textLines.size) {
                 lineIndex = currentPage.textLines.size
                 break
             }
@@ -368,13 +346,25 @@ object ReadBook {
         val currentLine = currentPage.textLines[lineIndex]
         length -= currentLine.text.length
         val charIndex = contentPosition - length
-        return arrayOf(pageIndex, lineIndex, charIndex)
+        var addLine = 0
+        var charIndex2 = 0
+        // change line
+        if ((charIndex + query.length) > currentLine.text.length) {
+            addLine = 1
+            charIndex2 = charIndex + query.length - currentLine.text.length - 1
+        }
+        // changePage
+        if ((lineIndex + addLine + 1) > currentPage.textLines.size) {
+            addLine = -1
+            charIndex2 = charIndex + query.length - currentLine.text.length - 1
+        }
+        return arrayOf(pageIndex, lineIndex, charIndex, addLine, charIndex2)
     }
 
     /**
      * 内容加载完成
      */
-    private fun contentLoadFinish(
+    fun contentLoadFinish(
         book: Book,
         chapter: BookChapter,
         content: String,
@@ -388,13 +378,7 @@ object ReadBook {
                     2 -> HanLP.convertToTraditionalChinese(chapter.title)
                     else -> chapter.title
                 }
-                val contents = BookHelp.disposeContent(
-                    chapter.title,
-                    book.name,
-                    webBook?.bookSource?.bookSourceUrl,
-                    content,
-                    book.useReplaceRule
-                )
+                val contents = BookHelp.disposeContent(book, chapter.title, content)
                 when (chapter.index) {
                     durChapterIndex -> {
                         curTextChapter =
@@ -443,6 +427,16 @@ object ReadBook {
 
     private val imageStyle get() = webBook?.bookSource?.ruleContent?.imageStyle
 
+    fun pageAnim(): Int {
+        book?.let {
+            return if (it.getPageAnim() < 0)
+                ReadBookConfig.pageAnim
+            else
+                it.getPageAnim()
+        }
+        return ReadBookConfig.pageAnim
+    }
+
     fun setCharset(charset: String) {
         book?.let {
             it.charset = charset
@@ -472,6 +466,7 @@ object ReadBook {
         fun upView()
         fun pageChanged()
         fun contentLoadFinish()
+        fun upPageAnim()
     }
 
 }

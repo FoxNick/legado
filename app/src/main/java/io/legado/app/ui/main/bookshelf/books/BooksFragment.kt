@@ -2,6 +2,7 @@ package io.legado.app.ui.main.bookshelf.books
 
 import android.os.Bundle
 import android.view.View
+import androidx.core.view.isGone
 import androidx.lifecycle.LiveData
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
@@ -26,20 +27,22 @@ import io.legado.app.ui.main.MainViewModel
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getViewModelOfActivity
 import io.legado.app.utils.observeEvent
+import io.legado.app.utils.startActivity
 import kotlinx.android.synthetic.main.fragment_books.*
-import org.jetbrains.anko.startActivity
 import kotlin.math.max
 
-
+/**
+ * 书架界面
+ */
 class BooksFragment : BaseFragment(R.layout.fragment_books),
     BaseBooksAdapter.CallBack {
 
     companion object {
-        fun newInstance(position: Int, groupId: Int): BooksFragment {
+        fun newInstance(position: Int, groupId: Long): BooksFragment {
             return BooksFragment().apply {
                 val bundle = Bundle()
                 bundle.putInt("position", position)
-                bundle.putInt("groupId", groupId)
+                bundle.putLong("groupId", groupId)
                 arguments = bundle
             }
         }
@@ -50,12 +53,12 @@ class BooksFragment : BaseFragment(R.layout.fragment_books),
     private lateinit var booksAdapter: BaseBooksAdapter
     private var bookshelfLiveData: LiveData<List<Book>>? = null
     private var position = 0
-    private var groupId = -1
+    private var groupId = -1L
 
     override fun onFragmentCreated(view: View, savedInstanceState: Bundle?) {
         arguments?.let {
             position = it.getInt("position", 0)
-            groupId = it.getInt("groupId", -1)
+            groupId = it.getLong("groupId", -1)
         }
         initRecyclerView()
         upRecyclerData()
@@ -99,23 +102,25 @@ class BooksFragment : BaseFragment(R.layout.fragment_books),
     private fun upRecyclerData() {
         bookshelfLiveData?.removeObservers(this)
         bookshelfLiveData = when (groupId) {
-            AppConst.bookGroupAll.groupId -> App.db.bookDao().observeAll()
-            AppConst.bookGroupLocal.groupId -> App.db.bookDao().observeLocal()
-            AppConst.bookGroupAudio.groupId -> App.db.bookDao().observeAudio()
-            AppConst.bookGroupNone.groupId -> App.db.bookDao().observeNoGroup()
+            AppConst.bookGroupAllId -> App.db.bookDao().observeAll()
+            AppConst.bookGroupLocalId -> App.db.bookDao().observeLocal()
+            AppConst.bookGroupAudioId -> App.db.bookDao().observeAudio()
+            AppConst.bookGroupNoneId -> App.db.bookDao().observeNoGroup()
             else -> App.db.bookDao().observeByGroup(groupId)
-        }
-        bookshelfLiveData?.observe(this, { list ->
-            val books = when (getPrefInt(PreferKey.bookshelfSort)) {
-                1 -> list.sortedByDescending { it.latestChapterTime }
-                2 -> list.sortedBy { it.name }
-                3 -> list.sortedBy { it.order }
-                else -> list.sortedByDescending { it.durChapterTime }
+        }.apply {
+            observe(viewLifecycleOwner) { list ->
+                tv_empty_msg.isGone = list.isNotEmpty()
+                val books = when (getPrefInt(PreferKey.bookshelfSort)) {
+                    1 -> list.sortedByDescending { it.latestChapterTime }
+                    2 -> list.sortedBy { it.name }
+                    3 -> list.sortedBy { it.order }
+                    else -> list.sortedByDescending { it.durChapterTime }
+                }
+                val diffResult = DiffUtil
+                    .calculateDiff(BooksDiffCallBack(booksAdapter.getItems(), books))
+                booksAdapter.setItems(books, diffResult)
             }
-            val diffResult = DiffUtil
-                .calculateDiff(BooksDiffCallBack(booksAdapter.getItems(), books))
-            booksAdapter.setItems(books, diffResult)
-        })
+        }
     }
 
     fun getBooks(): List<Book> {
@@ -130,11 +135,15 @@ class BooksFragment : BaseFragment(R.layout.fragment_books),
         }
     }
 
+    fun getBooksCount(): Int {
+        return booksAdapter.getActualItemCount()
+    }
+
     override fun open(book: Book) {
         when (book.type) {
             BookType.audio ->
-                context?.startActivity<AudioPlayActivity>(Pair("bookUrl", book.bookUrl))
-            else -> context?.startActivity<ReadBookActivity>(
+                startActivity<AudioPlayActivity>(Pair("bookUrl", book.bookUrl))
+            else -> startActivity<ReadBookActivity>(
                 Pair("bookUrl", book.bookUrl),
                 Pair("key", IntentDataHelp.putData(book))
             )
@@ -142,7 +151,7 @@ class BooksFragment : BaseFragment(R.layout.fragment_books),
     }
 
     override fun openBookInfo(book: Book) {
-        context?.startActivity<BookInfoActivity>(
+        startActivity<BookInfoActivity>(
             Pair("name", book.name),
             Pair("author", book.author)
         )

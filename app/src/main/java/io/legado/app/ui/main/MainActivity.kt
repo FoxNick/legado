@@ -19,6 +19,7 @@ import io.legado.app.help.AppConfig
 import io.legado.app.help.BookHelp
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.theme.ATH
+import io.legado.app.lib.theme.elevation
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.main.bookshelf.BookshelfFragment
 import io.legado.app.ui.main.explore.ExploreFragment
@@ -38,6 +39,7 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         get() = getViewModel(MainViewModel::class.java)
     private var exitTime: Long = 0
     private var bookshelfReselected: Long = 0
+    private var exploreReselected: Long = 0
     private var pagePosition = 0
     private val fragmentMap = hashMapOf<Int, Fragment>()
 
@@ -47,6 +49,8 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         view_pager_main.offscreenPageLimit = 3
         view_pager_main.adapter = TabFragmentPageAdapter(supportFragmentManager)
         view_pager_main.addOnPageChangeListener(this)
+        bottom_navigation_view.elevation =
+            if (AppConfig.elevation < 0) elevation else AppConfig.elevation.toFloat()
         bottom_navigation_view.setOnNavigationItemSelectedListener(this)
         bottom_navigation_view.setOnNavigationItemReselectedListener(this)
         bottom_navigation_view.menu.findItem(R.id.menu_rss).isVisible = AppConfig.isShowRSS
@@ -69,7 +73,7 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     override fun onNavigationItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.menu_bookshelf -> view_pager_main.setCurrentItem(0, false)
-            R.id.menu_find_book -> view_pager_main.setCurrentItem(1, false)
+            R.id.menu_explore -> view_pager_main.setCurrentItem(1, false)
             R.id.menu_rss -> view_pager_main.setCurrentItem(2, false)
             R.id.menu_my_config -> view_pager_main.setCurrentItem(3, false)
         }
@@ -83,6 +87,13 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
                     bookshelfReselected = System.currentTimeMillis()
                 } else {
                     (fragmentMap[0] as? BookshelfFragment)?.gotoTop()
+                }
+            }
+            R.id.menu_explore -> {
+                if (System.currentTimeMillis() - exploreReselected > 300) {
+                    exploreReselected = System.currentTimeMillis()
+                } else {
+                    (fragmentMap[1] as? ExploreFragment)?.compressExplore()
                 }
             }
         }
@@ -167,32 +178,11 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
     private inner class TabFragmentPageAdapter(fm: FragmentManager) :
         FragmentStatePagerAdapter(fm, BEHAVIOR_RESUME_ONLY_CURRENT_FRAGMENT) {
 
-        private fun getBookshelfFragment(): Fragment {
-            if (!fragmentMap.containsKey(0)) {
-                fragmentMap[0] = BookshelfFragment()
+        private fun getId(position: Int): Int {
+            return when (position) {
+                2 -> if (AppConfig.isShowRSS) 2 else 3
+                else -> position
             }
-            return fragmentMap.getValue(0)
-        }
-
-        private fun getExploreFragment(): Fragment {
-            if (!fragmentMap.containsKey(1)) {
-                fragmentMap[1] = ExploreFragment()
-            }
-            return fragmentMap.getValue(1)
-        }
-
-        private fun getRssFragment(): Fragment {
-            if (!fragmentMap.containsKey(2)) {
-                fragmentMap[2] = RssFragment()
-            }
-            return fragmentMap.getValue(2)
-        }
-
-        private fun getMyFragment(): Fragment {
-            if (!fragmentMap.containsKey(3)) {
-                fragmentMap[3] = MyFragment()
-            }
-            return fragmentMap.getValue(3)
         }
 
         override fun getItemPosition(`object`: Any): Int {
@@ -200,15 +190,11 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
         }
 
         override fun getItem(position: Int): Fragment {
-            return when (position) {
-                0 -> getBookshelfFragment()
-                1 -> getExploreFragment()
-                2 -> if (AppConfig.isShowRSS) {
-                    getRssFragment()
-                } else {
-                    getMyFragment()
-                }
-                else -> getMyFragment()
+            return when (getId(position)) {
+                0 -> fragmentMap[0] ?: BookshelfFragment()
+                1 -> fragmentMap[1] ?: ExploreFragment()
+                2 -> fragmentMap[2] ?: RssFragment()
+                else -> fragmentMap[3] ?: MyFragment()
             }
         }
 
@@ -218,13 +204,7 @@ class MainActivity : VMBaseActivity<MainViewModel>(R.layout.activity_main),
 
         override fun instantiateItem(container: ViewGroup, position: Int): Any {
             val fragment = super.instantiateItem(container, position) as Fragment
-            val id = when (position) {
-                2 -> if (AppConfig.isShowRSS) 2 else 3
-                else -> position
-            }
-            if (!fragmentMap.containsKey(id)) {
-                fragmentMap[id] = fragment
-            }
+            fragmentMap[getId(position)] = fragment
             return fragment
         }
 

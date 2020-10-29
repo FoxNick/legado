@@ -11,14 +11,18 @@ import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.utils.*
-import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import org.apache.commons.text.similarity.JaccardSimilarity
+import net.ricecode.similarity.JaroWinklerStrategy
+import net.ricecode.similarity.StringSimilarityServiceImpl
 import org.jetbrains.anko.toast
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
 
 object BookHelp {
@@ -97,7 +101,7 @@ object BookHelp {
         downloadImages.add(src)
         val analyzeUrl = AnalyzeUrl(src)
         try {
-            analyzeUrl.getImageBytes(book.origin)?.let {
+            analyzeUrl.getResponseBytes(book.origin)?.let {
                 FileUtils.createFileIfNotExist(
                     downloadDir,
                     cacheFolderName,
@@ -202,54 +206,99 @@ object BookHelp {
     }
 
     /**
-     * 找到相似度最高的章节
+     * 根据目录名获取当前章节
      */
-    fun getDurChapterIndexByChapterTitle(
-        title: String?,
-        index: Int,
-        chapters: List<BookChapter>,
+    fun getDurChapter(
+        oldDurChapterIndex: Int,
+        oldChapterListSize: Int,
+        oldDurChapterName: String?,
+        newChapterList: List<BookChapter>
     ): Int {
-        if (title.isNullOrEmpty()) {
-            return min(index, chapters.lastIndex)
-        }
-        if (chapters.size > index && title == chapters[index].title) {
-            return index
-        }
-
+        if (oldChapterListSize == 0) return 0
+        val oldChapterNum = getChapterNum(oldDurChapterName)
+        val oldName = getPureChapterName(oldDurChapterName)
+        val newChapterSize = newChapterList.size
+        val min = max(
+            0,
+            min(
+                oldDurChapterIndex,
+                oldDurChapterIndex - oldChapterListSize + newChapterSize
+            ) - 10
+        )
+        val max = min(
+            newChapterSize - 1,
+            max(
+                oldDurChapterIndex,
+                oldDurChapterIndex - oldChapterListSize + newChapterSize
+            ) + 10
+        )
+        var nameSim = 0.0
         var newIndex = 0
-        val jSimilarity = JaccardSimilarity()
-        var similarity = if (chapters.size > index) {
-            jSimilarity.apply(title, chapters[index].title)
-        } else 0.0
-        if (similarity == 1.0) {
-            return index
-        } else {
-            for (i in 1..50) {
-                if (index - i in chapters.indices) {
-                    jSimilarity.apply(title, chapters[index - i].title).let {
-                        if (it > similarity) {
-                            similarity = it
-                            newIndex = index - i
-                            if (similarity == 1.0) {
-                                return newIndex
-                            }
-                        }
-                    }
-                }
-                if (index + i in chapters.indices) {
-                    jSimilarity.apply(title, chapters[index + i].title).let {
-                        if (it > similarity) {
-                            similarity = it
-                            newIndex = index + i
-                            if (similarity == 1.0) {
-                                return newIndex
-                            }
-                        }
-                    }
+        var newNum = 0
+        if (oldName.isNotEmpty()) {
+            val service = StringSimilarityServiceImpl(JaroWinklerStrategy())
+            for (i in min..max) {
+                val newName = getPureChapterName(newChapterList[i].title)
+                val temp = service.score(oldName, newName)
+                if (temp > nameSim) {
+                    nameSim = temp
+                    newIndex = i
                 }
             }
         }
-        return newIndex
+        if (nameSim < 0.96 && oldChapterNum > 0) {
+            for (i in min..max) {
+                val temp = getChapterNum(newChapterList[i].title)
+                if (temp == oldChapterNum) {
+                    newNum = temp
+                    newIndex = i
+                    break
+                } else if (abs(temp - oldChapterNum) < abs(newNum - oldChapterNum)) {
+                    newNum = temp
+                    newIndex = i
+                }
+            }
+        }
+        return if (nameSim > 0.96 || abs(newNum - oldChapterNum) < 1) {
+            newIndex
+        } else {
+            min(max(0, newChapterList.size - 1), oldDurChapterIndex)
+        }
+    }
+
+    private val chapterNamePattern by lazy {
+        Pattern.compile("^(.*?第([\\d零〇一二两三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟０-９\\s]+)[章节篇回集])[、，。　：:.\\s]*")
+    }
+
+    private fun getChapterNum(chapterName: String?): Int {
+        if (chapterName != null) {
+            val matcher: Matcher = chapterNamePattern.matcher(chapterName)
+            if (matcher.find()) {
+                return StringUtils.stringToInt(matcher.group(2))
+            }
+        }
+        return -1
+    }
+
+    @Suppress("SpellCheckingInspection")
+    private val regexOther by lazy {
+        // 所有非字母数字中日韩文字 CJK区+扩展A-F区
+        return@lazy "[^\\w\\u4E00-\\u9FEF〇\\u3400-\\u4DBF\\u20000-\\u2A6DF\\u2A700-\\u2EBEF]".toRegex()
+    }
+
+    private val regexA by lazy {
+        return@lazy "\\s".toRegex()
+    }
+
+    private val regexB by lazy {
+        return@lazy "^第.*?章|[(\\[][^()\\[\\]]{2,}[)\\]]$".toRegex()
+    }
+
+    private fun getPureChapterName(chapterName: String?): String {
+        return if (chapterName == null) "" else StringUtils.fullToHalf(chapterName)
+            .replace(regexA, "")
+            .replace(regexB, "")
+            .replace(regexOther, "")
     }
 
     private var bookName: String? = null
@@ -257,38 +306,36 @@ object BookHelp {
     private var replaceRules: List<ReplaceRule> = arrayListOf()
 
     @Synchronized
-    suspend fun upReplaceRules() {
-        withContext(IO) {
-            synchronized(this) {
-                val o = bookOrigin
-                bookName?.let {
-                    replaceRules = if (o.isNullOrEmpty()) {
-                        App.db.replaceRuleDao().findEnabledByScope(it)
-                    } else {
-                        App.db.replaceRuleDao().findEnabledByScope(it, o)
-                    }
-                }
+    fun upReplaceRules() {
+        val o = bookOrigin
+        bookName?.let {
+            replaceRules = if (o.isNullOrEmpty()) {
+                App.db.replaceRuleDao().findEnabledByScope(it)
+            } else {
+                App.db.replaceRuleDao().findEnabledByScope(it, o)
             }
         }
     }
 
     suspend fun disposeContent(
+        book: Book,
         title: String,
-        name: String,
-        origin: String?,
         content: String,
-        enableReplace: Boolean,
     ): List<String> {
-        var c = content
-        if (enableReplace) {
+        var title1 = title
+        var content1 = content
+        if (book.getReSegment()) {
+            content1 = ContentHelp.reSegment(content1, title1)
+        }
+        if (book.getUseReplaceRule()) {
             synchronized(this) {
-                if (bookName != name || bookOrigin != origin) {
-                    bookName = name
-                    bookOrigin = origin
-                    replaceRules = if (origin.isNullOrEmpty()) {
-                        App.db.replaceRuleDao().findEnabledByScope(name)
+                if (bookName != book.name || bookOrigin != book.origin) {
+                    bookName = book.name
+                    bookOrigin = book.origin
+                    replaceRules = if (bookOrigin.isNullOrEmpty()) {
+                        App.db.replaceRuleDao().findEnabledByScope(bookName!!)
                     } else {
-                        App.db.replaceRuleDao().findEnabledByScope(name, origin)
+                        App.db.replaceRuleDao().findEnabledByScope(bookName!!, bookOrigin!!)
                     }
                 }
             }
@@ -296,10 +343,10 @@ object BookHelp {
                 item.pattern.let {
                     if (it.isNotEmpty()) {
                         try {
-                            c = if (item.isRegex) {
-                                c.replace(it.toRegex(), item.replacement)
+                            content1 = if (item.isRegex) {
+                                content1.replace(it.toRegex(), item.replacement)
                             } else {
-                                c.replace(it, item.replacement)
+                                content1.replace(it, item.replacement)
                             }
                         } catch (e: Exception) {
                             withContext(Main) {
@@ -312,8 +359,14 @@ object BookHelp {
         }
         try {
             when (AppConfig.chineseConverterType) {
-                1 -> c = HanLP.convertToSimplifiedChinese(c)
-                2 -> c = HanLP.convertToTraditionalChinese(c)
+                1 -> {
+                    title1 = HanLP.convertToSimplifiedChinese(title1)
+                    content1 = HanLP.convertToSimplifiedChinese(content1)
+                }
+                2 -> {
+                    title1 = HanLP.convertToTraditionalChinese(title1)
+                    content1 = HanLP.convertToTraditionalChinese(content1)
+                }
             }
         } catch (e: Exception) {
             withContext(Main) {
@@ -321,16 +374,15 @@ object BookHelp {
             }
         }
         val contents = arrayListOf<String>()
-        c.split("\n").forEach {
-            val str = it.replace("^\\s+".toRegex(), "")
-                .replace("\r", "")
+        content1.split("\n").forEach {
+            val str = it.replace("^[\\n\\s\\r]+".toRegex(), "")
             if (contents.isEmpty()) {
-                contents.add(title)
-                if (str != title && it.isNotEmpty()) {
-                    contents.add("${ReadBookConfig.bodyIndent}$str")
+                contents.add(title1)
+                if (str != title1 && str.isNotEmpty()) {
+                    contents.add("${ReadBookConfig.paragraphIndent}$str")
                 }
             } else if (str.isNotEmpty()) {
-                contents.add("${ReadBookConfig.bodyIndent}$str")
+                contents.add("${ReadBookConfig.paragraphIndent}$str")
             }
         }
         return contents

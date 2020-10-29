@@ -3,7 +3,6 @@ package io.legado.app.ui.book.read.config
 import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Bundle
-import android.util.DisplayMetrics
 import android.view.LayoutInflater
 import android.view.MenuItem
 import android.view.View
@@ -24,18 +23,19 @@ import io.legado.app.lib.dialogs.customView
 import io.legado.app.lib.dialogs.okButton
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.service.help.ReadAloud
+import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.*
 import kotlinx.android.synthetic.main.dialog_http_tts_edit.view.*
 import kotlinx.android.synthetic.main.dialog_recycler_view.*
 import kotlinx.android.synthetic.main.item_http_tts.view.*
 import org.jetbrains.anko.sdk27.listeners.onClick
+import java.io.File
 
 class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener {
 
     override fun onStart() {
         super.onStart()
-        val dm = DisplayMetrics()
-        activity?.windowManager?.defaultDisplay?.getMetrics(dm)
+        val dm = requireActivity().getSize()
         dialog?.window?.setLayout((dm.widthPixels * 0.9).toInt(), (dm.heightPixels * 0.9).toInt())
     }
 
@@ -125,6 +125,12 @@ class SpeakEngineDialog : BaseDialogFragment(), Toolbar.OnMenuItemClickListener 
                     App.db.httpTTSDao().insert(httpTTS)
                     ReadAloud.upReadAloudClass()
                 }
+            }
+            neutralButton(R.string.help) {
+                val helpStr = String(
+                    requireContext().assets.open("help${File.separator}httpTts.md").readBytes()
+                )
+                TextDialog.show(childFragmentManager, helpStr, TextDialog.MD)
             }
         }.show().applyTint()
     }

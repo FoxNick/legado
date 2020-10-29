@@ -48,17 +48,6 @@ object HttpHelper {
         return null
     }
 
-    fun getBytes(url: String, queryMap: Map<String, String>, headers: Map<String, String>): ByteArray? {
-        NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
-            return getByteRetrofit(baseUrl)
-                .create(HttpGetApi::class.java)
-                .getMapByte(url, queryMap, headers)
-                .execute()
-                .body()
-        }
-        return null
-    }
-
     suspend fun simpleGetAsync(url: String, encode: String? = null): String? {
         NetworkUtils.getBaseUrl(url)?.let { baseUrl ->
             val response = getApiService<HttpGetApi>(baseUrl, encode)
@@ -78,16 +67,16 @@ object HttpHelper {
         return null
     }
 
-    inline fun <reified T> getApiService(baseUrl: String, encode: String? = null): T {
-        return getRetrofit(baseUrl, encode).create(T::class.java)
-    }
-
-    inline fun <reified T> getApiServiceWithProxy(
+    inline fun <reified T> getApiService(
         baseUrl: String,
         encode: String? = null,
         proxy: String? = null
     ): T {
-        return getRetrofitWithProxy(baseUrl, encode, proxy).create(T::class.java)
+        return if (proxy.isNullOrEmpty()) {
+            getRetrofit(baseUrl, encode).create(T::class.java)
+        } else {
+            getRetrofitWithProxy(baseUrl, encode, proxy).create(T::class.java)
+        }
     }
 
     inline fun <reified T> getBytesApiService(baseUrl: String): T {
@@ -108,7 +97,7 @@ object HttpHelper {
         proxy: String? = null
     ): Retrofit {
         val r = Regex("(http|socks4|socks5)://(.*):(\\d{2,5})(@.*@.*)?")
-        val ms = proxy?.let { r.findAll(it) };
+        val ms = proxy?.let { r.findAll(it) }
         val group = ms?.first()
         var type = "direct"     //直接连接
         var host = "127.0.0.1"  //代理服务器hostname
@@ -131,9 +120,9 @@ object HttpHelper {
         val builder = client.newBuilder()
         if (type != "direct" && host != "") {
             if (type == "http") {
-                builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port)));
+                builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(host, port)))
             } else {
-                builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(host, port)));
+                builder.proxy(Proxy(Proxy.Type.SOCKS, InetSocketAddress(host, port)))
             }
             if (username != "" && password != "") {
                 builder.proxyAuthenticator { _, response -> //设置代理服务器账号密码
